@@ -1315,6 +1315,9 @@ ComposeControls::ComposeControls(
 	_privacyRow->addToggle(
 		PrivacyTogglesRow::Toggle::SendReadReceipts,
 		tr::lng_privacy_no_read_receipts(tr::now));
+	_privacyRow->addToggle(
+		PrivacyTogglesRow::Toggle::SendTypingStatus,
+		tr::lng_privacy_no_typing_status(tr::now));
 	if (_st.radius > 0) {
 		_backgroundRect.emplace(_st.radius, _st.bg);
 	}

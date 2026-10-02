@@ -40,6 +40,9 @@ void PrivacyTogglesRow::addToggle(Toggle toggle, const QString &text) {
 		case Toggle::SendReadReceipts:
 			setSendReadReceipts(checked);
 			break;
+		case Toggle::SendTypingStatus:
+			setSendTypingStatus(checked);
+			break;
 		}
 	}, lifetime());
 	_items.push_back({ toggle, button });
@@ -121,7 +124,13 @@ bool PrivacyTogglesRow::isApplicable(
 	switch (toggle) {
 	case Toggle::SendReadReceipts:
 		// Read receipts are never sent in broadcast channels.
-		return (peer->isUser() || peer->isChat());
+		return (!peer->isSelf() && (peer->isUser() || peer->isChat()));
+	case Toggle::SendTypingStatus:
+		// Typing is never sent in broadcast channels either.
+		return (!peer->isSelf()
+			&& (peer->isUser()
+				|| peer->isChat()
+				|| (peer->isChannel() && peer->isMegagroup())));
 	}
 	Unexpected("PrivacyTogglesRow::Toggle in isApplicable.");
 }
@@ -131,6 +140,8 @@ bool PrivacyTogglesRow::isChecked(Toggle toggle) const {
 	switch (toggle) {
 	case Toggle::SendReadReceipts:
 		return !_session->settings().noReadReceipts((*_peer)->id);
+	case Toggle::SendTypingStatus:
+		return !_session->settings().noTyping((*_peer)->id);
 	}
 	Unexpected("PrivacyTogglesRow::Toggle in isChecked.");
 }
@@ -144,6 +155,19 @@ void PrivacyTogglesRow::setSendReadReceipts(bool sendReadReceipts) {
 		settings.removeNoReadReceipts((*_peer)->id);
 	} else {
 		settings.setNoReadReceipts((*_peer)->id);
+	}
+	_session->saveSettingsDelayed();
+}
+
+void PrivacyTogglesRow::setSendTypingStatus(bool sendTypingStatus) {
+	if (!_peer) {
+		return;
+	}
+	auto &settings = _session->settings();
+	if (sendTypingStatus) {
+		settings.removeNoTyping((*_peer)->id);
+	} else {
+		settings.setNoTyping((*_peer)->id);
 	}
 	_session->saveSettingsDelayed();
 }
