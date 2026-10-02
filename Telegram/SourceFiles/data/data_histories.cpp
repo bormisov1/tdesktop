@@ -26,6 +26,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/unixtime.h"
 #include "base/random.h"
 #include "main/main_session.h"
+#include "main/main_session_settings.h"
 #include "window/notifications_manager.h"
 #include "history/history.h"
 #include "history/history_item.h"
@@ -273,6 +274,17 @@ void Histories::readInboxTill(
 	});
 
 	Core::App().notifications().clearIncomingFromHistory(history);
+
+	if (session().settings().noReadReceipts(history->peer->id)) {
+		DEBUG_LOG(("Reading: read receipts are disabled, "
+			"marking locally till %1.").arg(tillId.bare));
+		history->setInboxReadTill(tillId);
+		if (history->unreadCount() > 0) {
+			history->setUnreadCount(0);
+			history->updateChatListEntry();
+		}
+		return;
+	}
 
 	const auto needsRequest = history->readInboxTillNeedsRequest(tillId);
 	if (!needsRequest && !force) {

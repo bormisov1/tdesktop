@@ -92,6 +92,16 @@ public:
 		_groupEmojiSectionHidden.remove(peerId);
 	}
 
+	void setNoReadReceipts(PeerId peerId) {
+		_noReadReceipts.insert(peerId);
+	}
+	[[nodiscard]] bool noReadReceipts(PeerId peerId) const {
+		return _noReadReceipts.contains(peerId);
+	}
+	void removeNoReadReceipts(PeerId peerId) {
+		_noReadReceipts.remove(peerId);
+	}
+
 	[[nodiscard]] Data::AutoDownload::Full &autoDownload() {
 		return _autoDownload;
 	}
@@ -216,6 +226,7 @@ private:
 	ChatHelpers::SelectorTab _selectorTab; // per-window
 	base::flat_set<PeerId> _groupStickersSectionHidden;
 	base::flat_set<PeerId> _groupEmojiSectionHidden;
+	base::flat_set<PeerId> _noReadReceipts;
 	bool _hadLegacyCallsPeerToPeerNobody = false;
 	Data::AutoDownload::Full _autoDownload;
 	rpl::variable<bool> _archiveCollapsed = false;
