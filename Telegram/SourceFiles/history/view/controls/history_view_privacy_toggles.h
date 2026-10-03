@@ -29,6 +29,7 @@ class PrivacyTogglesRow final : public Ui::RpWidget {
 public:
 	enum class Toggle {
 		SendReadReceipts,
+		SendTypingStatus,
 	};
 
 	PrivacyTogglesRow(not_null<Main::Session*> session, QWidget *parent);
@@ -52,6 +53,7 @@ private:
 		not_null<PeerData*> peer);
 	[[nodiscard]] bool isChecked(Toggle toggle) const;
 	void setSendReadReceipts(bool sendReadReceipts);
+	void setSendTypingStatus(bool sendTypingStatus);
 
 	struct Item {
 		Toggle toggle;
