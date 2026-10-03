@@ -155,6 +155,46 @@ jobs:
           cmake --build build
           cmake --install build
 
+      - name: tlottie.
+        run: |
+          set -euo pipefail
+          export RUSTUP_HOME="$LibrariesPath/rust/rustup"
+          export CARGO_HOME="$LibrariesPath/rust/cargo"
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --no-modify-path --profile minimal --default-toolchain 1.96.1
+          export PATH="$CARGO_HOME/bin:$PATH"
+          rustup target add --toolchain 1.96.1 \
+            aarch64-apple-darwin x86_64-apple-darwin
+
+          git init "$LibrariesPath/patches"
+          cd "$LibrariesPath/patches"
+          git remote add origin https://github.com/desktop-app/patches.git
+          git fetch --depth=1 origin 593bd3c5ab2ce3294306426ffd1f01c5502caec8
+          git reset --hard FETCH_HEAD
+
+          git init "$LibrariesPath/tlottie"
+          cd "$LibrariesPath/tlottie"
+          git remote add origin https://github.com/dkaraush/tlottie.git
+          git fetch --depth=1 origin 31f1b542f88e7b4be9a01e749920d857535fc715
+          git reset --hard FETCH_HEAD
+          git apply ../patches/tlottie.patch
+          export RUSTUP_TOOLCHAIN=1.96.1
+          cargo rustc --lib --release --locked \
+            --features c-api --crate-type staticlib \
+            --target aarch64-apple-darwin -- --print native-static-libs
+          cargo rustc --lib --release --locked \
+            --features c-api --crate-type staticlib \
+            --target x86_64-apple-darwin -- --print native-static-libs
+
+          mkdir -p "$LibrariesPath/local/tlottie/lib" \
+            "$LibrariesPath/local/tlottie/include/tlottie"
+          lipo -create \
+            target/aarch64-apple-darwin/release/libtlottie.a \
+            target/x86_64-apple-darwin/release/libtlottie.a \
+            -output "$LibrariesPath/local/tlottie/lib/libtlottie.a"
+          cp include/tlottie.h \
+            "$LibrariesPath/local/tlottie/include/tlottie/tlottie.h"
+
       - name: Telegram Desktop build.
         if: env.ONLY_CACHE == 'false'
         run: |
