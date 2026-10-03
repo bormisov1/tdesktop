@@ -60,8 +60,9 @@ changing this fork's `dev` default branch. The workflow rejects nonnumeric,
 non-increasing, or not-yet-merged releases, builds a Release configuration
 in the CentOS environment with
 `DESKTOP_APP_SPECIAL_TARGET=linux` and `DESKTOP_APP_DISABLE_AUTOUPDATE=OFF`,
-packs `Telegram` and `Updater` with the channel key, and commits the
-package and the feed to `gh-pages`.
+then runs `Packer`. Test tags and manual dry-runs make an unsigned package
+without accessing the signing secret; release tags make the signed package
+and commit it with the feed to `gh-pages`.
 
 The channel key is not in the repository: it is the `UPDATE_CHANNEL_KEY`
 secret, written to a temporary file on the ephemeral runner for the Packer,

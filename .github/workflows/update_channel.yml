@@ -79,8 +79,13 @@ jobs:
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if [[ "$REF_NAME" == update-* || "$REF_NAME" == test-update-* ]] \
+          PUBLISH=false
+          if [[ "$REF_NAME" == update-* ]] \
             || { [ "$EVENT_NAME" = workflow_dispatch ] && [ "$PUBLISH_INPUT" = true ]; }; then
+            PUBLISH=true
+          fi
+          echo "publish=$PUBLISH" >> "$GITHUB_OUTPUT"
+          if [ "$PUBLISH" = true ]; then
             git fetch --no-tags origin \
               +refs/heads/custom:refs/remotes/origin/custom
             if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/custom; then
@@ -228,6 +233,7 @@ jobs:
           out/Release/test_update_unpack
 
       - name: Write the signing key.
+        if: steps.release.outputs.publish == 'true'
         env:
           UPDATE_CHANNEL_KEY: ${{ secrets.UPDATE_CHANNEL_KEY }}
         run: |
@@ -239,10 +245,12 @@ jobs:
           chmod 600 "$RUNNER_TEMP/channel-private.pem"
 
       - name: Pack the update.
+        id: pack
         env:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          PUBLISH_UPDATE: ${{ steps.release.outputs.publish }}
         run: |
-          trap 'rm -f "$RUNNER_TEMP/channel-private.pem"' EXIT
+          trap 'rm -f "$RUNNER_TEMP/channel-private.pem" "$RUNNER_TEMP/signing-input.bin"' EXIT
           cd out/Release
           KEY_ID=$(python3 -c 'import json; \
             groups = json.load(open("../../Telegram/Resources/update/manifest.min.json")) \
@@ -250,19 +258,34 @@ jobs:
             assert len(groups) == 1, "the stable channel needs exactly one signature group"; \
             print(groups[0][0])')
           echo "Signing key id from the manifest: $KEY_ID"
-          ./Packer -path Telegram -path Updater \
-            -version "$RELEASE_VERSION" \
-            -channel stable \
-            -keys-loc ../../Telegram/Resources/update \
-            -local-key "$RUNNER_TEMP/channel-private.pem" \
-            -local-key-id "$KEY_ID"
+          PACKAGE="td-update-linux-x64-${RELEASE_VERSION}"
+          if [ "$PUBLISH_UPDATE" = true ]; then
+            ./Packer -path Telegram -path Updater \
+              -version "$RELEASE_VERSION" \
+              -channel stable \
+              -keys-loc ../../Telegram/Resources/update \
+              -local-key "$RUNNER_TEMP/channel-private.pem" \
+              -local-key-id "$KEY_ID"
+          else
+            ./Packer -path Telegram -path Updater \
+              -version "$RELEASE_VERSION" \
+              -channel stable \
+              -keys-loc ../../Telegram/Resources/update \
+              -emit-signing-input "$RUNNER_TEMP/signing-input.bin"
+            PACKAGE="${PACKAGE}.unsigned"
+          fi
+          echo "package=$PACKAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Remove temporary signing files.
+        if: always()
+        run: rm -f "$RUNNER_TEMP/channel-private.pem" "$RUNNER_TEMP/signing-input.bin"
 
       - name: Write the feed.
         env:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          PACKAGE: ${{ steps.pack.outputs.package }}
         run: |
           cd out/Release
-          PACKAGE="td-update-linux-x64-${RELEASE_VERSION}"
           test -f "$PACKAGE"
           printf '{"linux":{"stable":{"released":%s,"link":"%s"}}}\n' \
             "$RELEASE_VERSION" "$PACKAGE" > current6
@@ -273,16 +296,16 @@ jobs:
         with:
           name: td-update-linux-x64-${{ steps.release.outputs.version }}
           path: |
-            out/Release/td-update-linux-x64-${{ steps.release.outputs.version }}
+            out/Release/${{ steps.pack.outputs.package }}
             out/Release/current6
           if-no-files-found: error
 
       - name: Publish to gh-pages.
-        if: startsWith(github.ref, 'refs/tags/update-') || (github.event_name == 'workflow_dispatch' && inputs.publish)
+        if: steps.release.outputs.publish == 'true'
         env:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          PACKAGE: ${{ steps.pack.outputs.package }}
         run: |
-          PACKAGE="td-update-linux-x64-${RELEASE_VERSION}"
           git fetch --depth=1 origin gh-pages
           git worktree add --detach "$RUNNER_TEMP/pages" FETCH_HEAD
           cd "$RUNNER_TEMP/pages"
