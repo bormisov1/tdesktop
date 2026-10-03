@@ -26,6 +26,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/unixtime.h"
 #include "base/random.h"
 #include "main/main_session.h"
+#include "main/main_session_settings.h"
 #include "window/notifications_manager.h"
 #include "history/history.h"
 #include "history/history_item.h"
@@ -280,6 +281,17 @@ void Histories::readInboxTill(
 		return;
 	} else if (!history->trackUnreadMessages()) {
 		DEBUG_LOG(("Reading: readInboxTill finish 2."));
+		return;
+	}
+	if (session().settings().noReadReceipts(history->peer->id)) {
+		DEBUG_LOG(("Reading: read receipts are disabled, "
+			"marking locally till %1.").arg(tillId.bare));
+		const auto stillUnread = history->countStillUnreadLocal(tillId);
+		history->setInboxReadTill(tillId);
+		if (stillUnread) {
+			history->setUnreadCount(*stillUnread);
+			history->updateChatListEntry();
+		}
 		return;
 	}
 	const auto maybeState = lookup(history);
@@ -713,6 +725,11 @@ void Histories::sendReadRequests() {
 }
 
 void Histories::sendReadRequest(not_null<History*> history, State &state) {
+	if (session().settings().noReadReceipts(history->peer->id)) {
+		state.willReadTill = 0;
+		state.willReadWhen = 0;
+		return;
+	}
 	Expects(state.willReadTill > state.sentReadTill);
 
 	const auto tillId = state.sentReadTill = base::take(state.willReadTill);

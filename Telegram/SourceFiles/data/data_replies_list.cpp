@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item.h"
 #include "history/history_item_helpers.h"
 #include "main/main_session.h"
+#include "main/main_session_settings.h"
 #include "data/data_histories.h"
 #include "data/data_session.h"
 #include "data/data_changes.h"
@@ -1004,6 +1005,13 @@ void RepliesList::sendReadTillRequest() {
 	}
 	const auto api = &_history->session().api();
 	api->request(base::take(_readRequestId)).cancel();
+
+	if (_history->session().settings().noReadReceipts(
+		_history->peer->id)) {
+		DEBUG_LOG(("Reading: read receipts are disabled, "
+			"not sending topic read receipt."));
+		return;
+	}
 
 	_readRequestId = api->request(MTPmessages_ReadDiscussion(
 		_history->peer->input(),
