@@ -275,23 +275,23 @@ void Histories::readInboxTill(
 
 	Core::App().notifications().clearIncomingFromHistory(history);
 
-	if (session().settings().noReadReceipts(history->peer->id)) {
-		DEBUG_LOG(("Reading: read receipts are disabled, "
-			"marking locally till %1.").arg(tillId.bare));
-		history->setInboxReadTill(tillId);
-		if (history->unreadCount() > 0) {
-			history->setUnreadCount(0);
-			history->updateChatListEntry();
-		}
-		return;
-	}
-
 	const auto needsRequest = history->readInboxTillNeedsRequest(tillId);
 	if (!needsRequest && !force) {
 		DEBUG_LOG(("Reading: readInboxTill finish 1."));
 		return;
 	} else if (!history->trackUnreadMessages()) {
 		DEBUG_LOG(("Reading: readInboxTill finish 2."));
+		return;
+	}
+	if (session().settings().noReadReceipts(history->peer->id)) {
+		DEBUG_LOG(("Reading: read receipts are disabled, "
+			"marking locally till %1.").arg(tillId.bare));
+		const auto stillUnread = history->countStillUnreadLocal(tillId);
+		history->setInboxReadTill(tillId);
+		if (stillUnread) {
+			history->setUnreadCount(*stillUnread);
+			history->updateChatListEntry();
+		}
 		return;
 	}
 	const auto maybeState = lookup(history);
@@ -725,6 +725,11 @@ void Histories::sendReadRequests() {
 }
 
 void Histories::sendReadRequest(not_null<History*> history, State &state) {
+	if (session().settings().noReadReceipts(history->peer->id)) {
+		state.willReadTill = 0;
+		state.willReadWhen = 0;
+		return;
+	}
 	Expects(state.willReadTill > state.sentReadTill);
 
 	const auto tillId = state.sentReadTill = base::take(state.willReadTill);

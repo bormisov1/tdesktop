@@ -131,6 +131,7 @@ void PrivacyTogglesRow::setSendReadReceipts(bool sendReadReceipts) {
 	} else {
 		settings.setNoReadReceipts(_peer->id);
 	}
+	_session->saveSettingsDelayed();
 }
 
 } // namespace HistoryView
