@@ -65,7 +65,7 @@ jobs:
           elif [[ "$REF_NAME" == test-update-* ]]; then
             VERSION="${REF_NAME#test-update-}"
           else
-            echo "::error::Use workflow_dispatch or an update-<version> tag."
+            echo "::error::Use workflow_dispatch or an update-/test-update-<version> tag."
             exit 1
           fi
           if [[ ! "$VERSION" =~ ^[1-9][0-9]{0,8}$ ]]; then
