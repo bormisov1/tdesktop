@@ -49,6 +49,7 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Validate release version.
         id: release
@@ -303,9 +304,22 @@ jobs:
       - name: Publish to gh-pages.
         if: steps.release.outputs.publish == 'true'
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
           PACKAGE: ${{ steps.pack.outputs.package }}
         run: |
+          cat > "$RUNNER_TEMP/git-askpass.sh" <<'EOF'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' x-access-token ;;
+            *) printf '%s\n' "$GH_TOKEN" ;;
+          esac
+          EOF
+          chmod 700 "$RUNNER_TEMP/git-askpass.sh"
+          export GIT_ASKPASS="$RUNNER_TEMP/git-askpass.sh"
+          export GIT_TERMINAL_PROMPT=0
+          trap 'rm -f "$RUNNER_TEMP/git-askpass.sh"' EXIT
+          git remote set-url origin "https://github.com/$GITHUB_REPOSITORY.git"
           git fetch --depth=1 origin gh-pages
           git worktree add --detach "$RUNNER_TEMP/pages" FETCH_HEAD
           cd "$RUNNER_TEMP/pages"
