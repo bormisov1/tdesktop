@@ -73,8 +73,15 @@ void SendProgressManager::update(
 		return;
 	}
 
-	const auto doing = (progress >= 0);
 	const auto key = Key{ history, topMsgId, type };
+	if (type == SendProgressType::Typing
+		&& _session->settings().noTyping(peer->id)) {
+		cancel(history, topMsgId, type);
+		_updated.erase(key);
+		return;
+	}
+
+	const auto doing = (progress >= 0);
 	if (updated(key, doing)) {
 		cancel(history, topMsgId, type);
 		if (doing) {
