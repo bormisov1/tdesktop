@@ -54,8 +54,8 @@ never leaves the runner.
 `Update channel.` (`.github/workflows/update_channel.yml`) is the supported
 publishing path. It accepts an `update-<version>` tag to publish, a
 `test-update-<version>` tag for a non-publishing pack/build test, or a
-manual dispatch with an explicit version. Publishing tags must point to a
-commit already merged into `custom`; tags let publishing work without
+manual dispatch with an explicit version. Release and test tags must point
+to a commit already merged into `custom`; tags let publishing work without
 changing this fork's `dev` default branch. The workflow rejects nonnumeric,
 non-increasing, or not-yet-merged releases, builds a Release configuration
 in the CentOS environment with

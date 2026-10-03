@@ -79,12 +79,12 @@ jobs:
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if [[ "$REF_NAME" == update-* ]] \
+          if [[ "$REF_NAME" == update-* || "$REF_NAME" == test-update-* ]] \
             || { [ "$EVENT_NAME" = workflow_dispatch ] && [ "$PUBLISH_INPUT" = true ]; }; then
             git fetch --no-tags origin \
               +refs/heads/custom:refs/remotes/origin/custom
             if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/custom; then
-              echo "::error::Publishing is only allowed from a commit already in custom."
+              echo "::error::Release tags must point to a commit already in custom."
               exit 1
             fi
           fi
