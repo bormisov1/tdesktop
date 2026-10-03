@@ -13,6 +13,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session_settings.h"
 #include "ui/widgets/checkbox.h"
 
+#include <QtGui/QResizeEvent>
+
 #include <algorithm>
 
 namespace HistoryView {
@@ -43,7 +45,7 @@ void PrivacyTogglesRow::addToggle(Toggle toggle, const QString &text) {
 	_items.push_back({ toggle, button });
 }
 
-void PrivacyTogglesRow::setPeer(not_null<Data::PeerData*> peer) {
+void PrivacyTogglesRow::setPeer(not_null<PeerData*> peer) {
 	_peer = peer;
 	_displayed = false;
 	for (const auto &item : _items) {
@@ -65,9 +67,16 @@ int PrivacyTogglesRow::rowHeight() const {
 	return _displayed ? heightNoMargins() : 0;
 }
 
+void PrivacyTogglesRow::resizeToWidth(int newWidth) {
+	Ui::RpWidget::resizeToWidth(newWidth);
+	updateControlsGeometry(size());
+}
+
 int PrivacyTogglesRow::resizeGetHeight(int newWidth) {
-	const auto shownItems = std::count_if(_items.begin(), _items.end(),
-		[](const auto &item) { return !item.button->isHidden(); });
+	const auto shownItems = int(std::count_if(
+		_items.begin(),
+		_items.end(),
+		[](const auto &item) { return !item.button->isHidden(); }));
 	if (!shownItems) {
 		_itemsLeft = 0;
 		return 0;
@@ -101,9 +110,14 @@ void PrivacyTogglesRow::updateControlsGeometry(QSize size) {
 	}
 }
 
+void PrivacyTogglesRow::resizeEvent(QResizeEvent *event) {
+	QWidget::resizeEvent(event);
+	updateControlsGeometry(event->size());
+}
+
 bool PrivacyTogglesRow::isApplicable(
 		Toggle toggle,
-		not_null<Data::PeerData*> peer) {
+		not_null<PeerData*> peer) {
 	switch (toggle) {
 	case Toggle::SendReadReceipts:
 		// Read receipts are never sent in broadcast channels.
@@ -116,7 +130,7 @@ bool PrivacyTogglesRow::isChecked(Toggle toggle) const {
 	Expects(_peer.has_value());
 	switch (toggle) {
 	case Toggle::SendReadReceipts:
-		return !_session->settings().noReadReceipts(_peer->id);
+		return !_session->settings().noReadReceipts((*_peer)->id);
 	}
 	Unexpected("PrivacyTogglesRow::Toggle in isChecked.");
 }
@@ -127,9 +141,9 @@ void PrivacyTogglesRow::setSendReadReceipts(bool sendReadReceipts) {
 	}
 	auto &settings = _session->settings();
 	if (sendReadReceipts) {
-		settings.removeNoReadReceipts(_peer->id);
+		settings.removeNoReadReceipts((*_peer)->id);
 	} else {
-		settings.setNoReadReceipts(_peer->id);
+		settings.setNoReadReceipts((*_peer)->id);
 	}
 	_session->saveSettingsDelayed();
 }

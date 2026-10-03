@@ -12,13 +12,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <optional>
 #include <vector>
 
+class PeerData;
+class QResizeEvent;
+
 namespace Main {
 class Session;
 } // namespace Main
-
-namespace Data {
-class PeerData;
-} // namespace Data
 
 namespace Ui {
 class Checkbox;
@@ -36,19 +35,21 @@ public:
 
 	void addToggle(Toggle toggle, const QString &text);
 
-	void setPeer(not_null<Data::PeerData*> peer);
+	void setPeer(not_null<PeerData*> peer);
+	void resizeToWidth(int newWidth);
 
 	[[nodiscard]] bool isDisplayed() const;
 	[[nodiscard]] int rowHeight() const;
 
 protected:
 	int resizeGetHeight(int newWidth) override;
-	void updateControlsGeometry(QSize size) override;
+	void resizeEvent(QResizeEvent *event) override;
 
 private:
+	void updateControlsGeometry(QSize size);
 	[[nodiscard]] static bool isApplicable(
 		Toggle toggle,
-		not_null<Data::PeerData*> peer);
+		not_null<PeerData*> peer);
 	[[nodiscard]] bool isChecked(Toggle toggle) const;
 	void setSendReadReceipts(bool sendReadReceipts);
 
@@ -58,7 +59,7 @@ private:
 	};
 
 	const not_null<Main::Session*> _session;
-	std::optional<not_null<Data::PeerData*>> _peer;
+	std::optional<not_null<PeerData*>> _peer;
 	std::vector<Item> _items;
 	bool _displayed = false;
 	int _itemsLeft = 0;
