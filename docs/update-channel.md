@@ -51,16 +51,21 @@ never leaves the runner.
 
 ## Publishing
 
-`Update channel.` (`.github/workflows/update_channel.yml`) is the only
-supported way to publish. It takes the base version as input, refuses
-versions that are not greater than `AppVersion` of the source, builds a
-Release configuration in the CentOS build environment with
+`Update channel.` (`.github/workflows/update_channel.yml`) is the supported
+publishing path. It accepts an `update-<version>` tag to publish, a
+`test-update-<version>` tag for a non-publishing pack/build test, or a
+manual dispatch with an explicit version. Publishing tags must point to a
+commit already merged into `custom`; tags let publishing work without
+changing this fork's `dev` default branch. The workflow rejects nonnumeric,
+non-increasing, or not-yet-merged releases, builds a Release configuration
+in the CentOS environment with
 `DESKTOP_APP_SPECIAL_TARGET=linux` and `DESKTOP_APP_DISABLE_AUTOUPDATE=OFF`,
 packs `Telegram` and `Updater` with the channel key, and commits the
 package and the feed to `gh-pages`.
 
 The channel key is not in the repository: it is the `UPDATE_CHANNEL_KEY`
-secret, written to a temporary file for the Packer and shredded right
+secret, written to a temporary file on the ephemeral runner for the Packer,
+then removed. Losing it means publishing a new manifest with a new key, committed
 after. Losing it means publishing a new manifest with a new key, committed
 together with its public key and root signature, which is a reviewed
 change to this repository like any other trust material change.

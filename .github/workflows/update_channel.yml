@@ -9,9 +9,13 @@ name: Update channel.
 #
 # The signing key is never stored in the repository: it lives in the
 # UPDATE_CHANNEL_KEY secret and is only ever passed to the Packer through
-# a file in the runner workspace.
+# a temporary file on the ephemeral runner.
 
 on:
+  push:
+    tags:
+      - 'update-*'
+      - 'test-update-*'
   workflow_dispatch:
     inputs:
       version:
@@ -24,8 +28,9 @@ on:
         default: true
         type: boolean
 
-permissions:
-  contents: write
+concurrency:
+  group: update-channel-publish
+  cancel-in-progress: false
 
 env:
   ONLY_CACHE: "false"
@@ -35,12 +40,54 @@ jobs:
   update:
     name: Linux x64
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Clone.
         uses: actions/checkout@v7
         with:
           submodules: recursive
+          fetch-depth: 0
+
+      - name: Validate release version.
+        id: release
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          PUBLISH_INPUT: ${{ inputs.publish }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
+          elif [[ "$REF_NAME" == update-* ]]; then
+            VERSION="${REF_NAME#update-}"
+          elif [[ "$REF_NAME" == test-update-* ]]; then
+            VERSION="${REF_NAME#test-update-}"
+          else
+            echo "::error::Use workflow_dispatch or an update-<version> tag."
+            exit 1
+          fi
+          if [[ ! "$VERSION" =~ ^[1-9][0-9]{0,8}$ ]]; then
+            echo "::error::Version must be a positive integer with at most 9 digits."
+            exit 1
+          fi
+          APP_VERSION=$(sed -n 's/^constexpr auto AppVersion = \([0-9]*\);.*/\1/p' \
+            Telegram/SourceFiles/core/version.h)
+          if [ -z "$APP_VERSION" ] || (( VERSION <= APP_VERSION )); then
+            echo "::error::Version must be greater than AppVersion ($APP_VERSION)."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$REF_NAME" == update-* ]] \
+            || { [ "$EVENT_NAME" = workflow_dispatch ] && [ "$PUBLISH_INPUT" = true ]; }; then
+            git fetch --no-tags origin \
+              +refs/heads/custom:refs/remotes/origin/custom
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/custom; then
+              echo "::error::Publishing is only allowed from a commit already in custom."
+              exit 1
+            fi
+          fi
 
       - name: First set up.
         run: |
@@ -173,16 +220,6 @@ jobs:
             exit 1
           fi
 
-      - name: Check the version.
-        run: |
-          APP_VERSION=$(sed -n 's/^constexpr auto AppVersion = \([0-9]*\);.*/\1/p' \
-            Telegram/SourceFiles/core/version.h)
-          echo "AppVersion in the sources: $APP_VERSION"
-          if ! test "${{ inputs.version }}" -gt "$APP_VERSION"; then
-            echo "The published version must be greater than AppVersion."
-            exit 1
-          fi
-
       - name: Verify the update trust chain.
         run: |
           # The same focused tests the canary release runs, against the
@@ -198,11 +235,14 @@ jobs:
             echo "::error::The UPDATE_CHANNEL_KEY secret is not set."
             exit 1
           fi
-          printf -- '%s\n' "$UPDATE_CHANNEL_KEY" > channel-private.pem
-          chmod 600 channel-private.pem
+          printf -- '%s' "$UPDATE_CHANNEL_KEY" > "$RUNNER_TEMP/channel-private.pem"
+          chmod 600 "$RUNNER_TEMP/channel-private.pem"
 
       - name: Pack the update.
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: |
+          trap 'rm -f "$RUNNER_TEMP/channel-private.pem"' EXIT
           cd out/Release
           KEY_ID=$(python3 -c 'import json; \
             groups = json.load(open("../../Telegram/Resources/update/manifest.min.json")) \
@@ -211,43 +251,53 @@ jobs:
             print(groups[0][0])')
           echo "Signing key id from the manifest: $KEY_ID"
           ./Packer -path Telegram -path Updater \
-            -version ${{ inputs.version }} \
+            -version "$RELEASE_VERSION" \
             -channel stable \
             -keys-loc ../../Telegram/Resources/update \
-            -local-key ../../channel-private.pem \
+            -local-key "$RUNNER_TEMP/channel-private.pem" \
             -local-key-id "$KEY_ID"
-          shred -u ../../channel-private.pem
 
       - name: Write the feed.
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: |
           cd out/Release
-          PACKAGE=td-update-linux-x64-${{ inputs.version }}
+          PACKAGE="td-update-linux-x64-${RELEASE_VERSION}"
           test -f "$PACKAGE"
-          cat > current6 <<EOF
-          {"linux":{"stable":{"released":${{ inputs.version }},"link":"$PACKAGE"}}}
-          EOF
+          printf '{"linux":{"stable":{"released":%s,"link":"%s"}}}\n' \
+            "$RELEASE_VERSION" "$PACKAGE" > current6
           cat current6
 
       - name: Upload the update package.
         uses: actions/upload-artifact@v7
         with:
-          name: td-update-linux-x64-${{ inputs.version }}
+          name: td-update-linux-x64-${{ steps.release.outputs.version }}
           path: |
-            out/Release/td-update-linux-x64-${{ inputs.version }}
+            out/Release/td-update-linux-x64-${{ steps.release.outputs.version }}
             out/Release/current6
           if-no-files-found: error
 
       - name: Publish to gh-pages.
-        if: inputs.publish
+        if: startsWith(github.ref, 'refs/tags/update-') || (github.event_name == 'workflow_dispatch' && inputs.publish)
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: |
-          PACKAGE=td-update-linux-x64-${{ inputs.version }}
-          git clone --depth 1 --branch gh-pages \
-            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
-            "$RUNNER_TEMP/pages"
+          PACKAGE="td-update-linux-x64-${RELEASE_VERSION}"
+          git fetch --depth=1 origin gh-pages
+          git worktree add --detach "$RUNNER_TEMP/pages" FETCH_HEAD
           cd "$RUNNER_TEMP/pages"
+          if [ -f current6 ]; then
+            CURRENT_VERSION=$(python3 -c 'import json; print(json.load(open("current6"))["linux"]["stable"]["released"])')
+            if (( RELEASE_VERSION <= CURRENT_VERSION )); then
+              echo "::error::Version $RELEASE_VERSION is not newer than published version $CURRENT_VERSION."
+              exit 1
+            fi
+          fi
           cp "$GITHUB_WORKSPACE/out/Release/$PACKAGE" .
           cp "$GITHUB_WORKSPACE/out/Release/current6" .
-          echo "Published on $(date -u +%FT%TZ), version ${{ inputs.version }}." > VERSION
+          echo "Published on $(date -u +%FT%TZ), version $RELEASE_VERSION." > VERSION
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add --all
-          git commit -m "publish $PACKAGE" || echo "Nothing to publish."
-          git push
+          git commit -m "publish $PACKAGE"
+          git push origin HEAD:gh-pages
