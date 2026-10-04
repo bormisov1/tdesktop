@@ -10,6 +10,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/timer.h"
 #include "base/weak_ptr.h"
 
+#include <limits>
+
 namespace Storage {
 class Domain;
 enum class StartResult : uchar;
@@ -31,8 +33,8 @@ public:
 		std::unique_ptr<Account> account;
 	};
 
-	static constexpr auto kMaxAccounts = 3;
-	static constexpr auto kPremiumMaxAccounts = 6;
+	static constexpr auto kMaxAccounts = std::numeric_limits<int>::max() - 1;
+	static constexpr auto kPremiumMaxAccounts = kMaxAccounts;
 
 	explicit Domain(const QString &dataName);
 	~Domain();
