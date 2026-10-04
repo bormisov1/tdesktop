@@ -205,6 +205,8 @@ jobs:
           env -u CCACHE_DISABLE /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
           -D CMAKE_CONFIGURATION_TYPES=Release \
           -D CMAKE_COMPILE_WARNING_AS_ERROR=ON \
+          # GCC 15 false-positive in the range-v3 QJsonArray transform.
+          -D CMAKE_CXX_FLAGS=-Wno-error=aggressive-loop-optimizations \
           -D DESKTOP_APP_SPECIAL_TARGET=linux \
           -D TDESKTOP_BUILD_UPDATE_TESTS=ON \
           -D DESKTOP_APP_DISABLE_AUTOUPDATE=OFF \
