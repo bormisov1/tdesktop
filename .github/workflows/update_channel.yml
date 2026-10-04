@@ -169,7 +169,7 @@ jobs:
         run: |
           mkdir -p ../DesktopPrivate
           random_key() {
-            printf -- '-----BEGIN RSA PRIVATE KEY-----\n%s\n-----END RSA PRIVATE KEY-----\n' \
+            printf -- '-----BEGIN RSA PRIVATE KEY-----\\n%s\\n-----END RSA PRIVATE KEY-----\\n' \
               "$(head -c 96 /dev/urandom | base64 | tr -d '\n')"
           }
           printf 'const char *PrivateKey = "%s";\nconst char *PrivateBetaKey = "%s";\n' \
