@@ -64,9 +64,12 @@ then runs `Packer`. Test tags and manual dry-runs make an unsigned package
 without accessing the signing secret; release tags make the signed package
 and commit it with the feed to `gh-pages`.
 
-The channel key is not in the repository: it is the `UPDATE_CHANNEL_KEY`
-secret, written to a temporary file on the ephemeral runner for the Packer,
-then removed. Losing it means publishing a new manifest with a new key, committed
-after. Losing it means publishing a new manifest with a new key, committed
-together with its public key and root signature, which is a reviewed
-change to this repository like any other trust material change.
+Publishing requires repository secrets `TDESKTOP_API_ID` and
+`TDESKTOP_API_HASH` for the fork's Telegram application, as well as
+`UPDATE_CHANNEL_KEY`. Test builds use Telegram's test-only API credentials
+and must not be distributed as production builds. The channel key is not in
+the repository: it is written to a temporary file on the ephemeral runner
+for the Packer, then removed. Losing it means publishing a new manifest
+with a new key, committed together with its public key and root signature,
+which is a reviewed change to this repository like any other trust material
+change.

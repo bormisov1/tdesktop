@@ -58,6 +58,8 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
           EVENT_NAME: ${{ github.event_name }}
           PUBLISH_INPUT: ${{ inputs.publish }}
+          TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+          TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
           if [ -n "$INPUT_VERSION" ]; then
             VERSION="$INPUT_VERSION"
@@ -87,6 +89,11 @@ jobs:
           fi
           echo "publish=$PUBLISH" >> "$GITHUB_OUTPUT"
           if [ "$PUBLISH" = true ]; then
+            if [[ ! "$TDESKTOP_API_ID" =~ ^[0-9]+$ ]] \
+              || [[ ! "$TDESKTOP_API_HASH" =~ ^[0-9a-fA-F]{32}$ ]]; then
+              echo "::error::Publishing requires TDESKTOP_API_ID and TDESKTOP_API_HASH repository secrets."
+              exit 1
+            fi
             git fetch --no-tags origin \
               +refs/heads/custom:refs/remotes/origin/custom
             if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/custom; then
@@ -172,8 +179,19 @@ jobs:
 
       - name: Telegram Desktop build.
         if: env.ONLY_CACHE == 'false'
+        env:
+          PUBLISH_UPDATE: ${{ steps.release.outputs.publish }}
+          TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+          TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
           ccache -z
+          API_ARGS=()
+          if [ "$PUBLISH_UPDATE" = true ]; then
+            API_ARGS+=(-D "TDESKTOP_API_ID=$TDESKTOP_API_ID")
+            API_ARGS+=(-D "TDESKTOP_API_HASH=$TDESKTOP_API_HASH")
+          else
+            API_ARGS+=(-D TDESKTOP_API_TEST=ON)
+          fi
 
           docker run --rm \
           -u $(id -u) \
@@ -190,7 +208,8 @@ jobs:
           -D DESKTOP_APP_SPECIAL_TARGET=linux \
           -D TDESKTOP_BUILD_UPDATE_TESTS=ON \
           -D DESKTOP_APP_DISABLE_AUTOUPDATE=OFF \
-          -D DESKTOP_APP_DISABLE_CRASH_REPORTS=OFF
+          -D DESKTOP_APP_DISABLE_CRASH_REPORTS=OFF \
+          "${API_ARGS[@]}"
 
       - name: Count ccache misses.
         id: ccache-stats
@@ -297,6 +316,8 @@ jobs:
         with:
           name: td-update-linux-x64-${{ steps.release.outputs.version }}
           path: |
+            out/Release/Telegram
+            out/Release/Updater
             out/Release/${{ steps.pack.outputs.package }}
             out/Release/current6
           if-no-files-found: error
