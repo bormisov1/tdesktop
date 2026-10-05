@@ -39,6 +39,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_app_config.h"
 #include "main/main_domain.h"
 #include "main/main_session.h"
+#include "main/main_session_settings.h"
 #include "platform/platform_webauthn.h"
 #include "settings/settings_builder.h"
 #include "settings/cloud_password/settings_cloud_password_email_confirm.h"
@@ -196,6 +197,137 @@ void ClearPaymentInfoBoxBuilder(
 		}, st::attentionBoxButton);
 		box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
 	}, st::attentionBoxButton);
+	box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
+}
+
+enum class LocalPrivacyKind {
+	Typing,
+	ReadReceipts,
+};
+
+struct LocalPrivacyState {
+	base::flat_set<PeerId> always;
+	base::flat_set<PeerId> never;
+};
+
+QString LocalPrivacyLabel(
+		const Main::SessionSettings &settings,
+		LocalPrivacyKind kind) {
+	const auto everyone = (kind == LocalPrivacyKind::Typing)
+		? settings.typingEveryone()
+		: settings.readReceiptsEveryone();
+	const auto always = (kind == LocalPrivacyKind::Typing)
+		? settings.typingAlways().size()
+		: settings.readReceiptsAlways().size();
+	const auto never = (kind == LocalPrivacyKind::Typing)
+		? settings.typingNever().size()
+		: settings.readReceiptsNever().size();
+	return (everyone
+		? tr::lng_edit_privacy_everyone(tr::now)
+		: tr::lng_edit_privacy_nobody(tr::now))
+		+ ((always || never)
+			? u" (+%1, -%2)"_q.arg(int(always)).arg(int(never))
+			: QString());
+}
+
+void LocalPrivacyBox(
+		not_null<Ui::GenericBox*> box,
+		not_null<Window::SessionController*> controller,
+		LocalPrivacyKind kind,
+		Fn<void()> updated) {
+	const auto session = &controller->session();
+	const auto &settings = session->settings();
+	const auto typing = (kind == LocalPrivacyKind::Typing);
+	box->setTitle(typing
+		? tr::lng_privacy_typing_title()
+		: tr::lng_privacy_read_receipts_title());
+	box->setWidth(st::boxWideWidth);
+	const auto inner = box->verticalLayout();
+	const auto state = box->lifetime().make_state<LocalPrivacyState>();
+	state->always = typing
+		? settings.typingAlways()
+		: settings.readReceiptsAlways();
+	state->never = typing
+		? settings.typingNever()
+		: settings.readReceiptsNever();
+	const auto group = std::make_shared<Ui::RadiobuttonGroup>(
+		(typing ? settings.typingEveryone() : settings.readReceiptsEveryone())
+			? 1
+			: 0);
+	Ui::AddSubsectionTitle(
+		inner,
+		tr::lng_privacy_send_status_to(),
+		{ 0, st::settingsPrivacySkipTop, 0, 0 });
+	inner->add(object_ptr<Ui::Radiobutton>(
+		inner,
+		group,
+		1,
+		tr::lng_edit_privacy_everyone(tr::now),
+		st::messagePrivacyCheck), st::settingsSendTypePadding);
+	inner->add(object_ptr<Ui::Radiobutton>(
+		inner,
+		group,
+		0,
+		tr::lng_edit_privacy_nobody(tr::now),
+		st::messagePrivacyCheck), st::settingsSendTypePadding);
+	Ui::AddSkip(inner);
+	Ui::AddSubsectionTitle(inner, tr::lng_edit_privacy_exceptions());
+	const auto changed = inner->lifetime().make_state<rpl::event_stream<>>();
+	const auto addExceptions = [&](bool always) {
+		const auto title = always
+			? tr::lng_edit_privacy_lastseen_always_empty()
+			: tr::lng_edit_privacy_lastseen_never_empty();
+		auto count = changed->events_starting_with({}) | rpl::map([=] {
+			return QString::number(int(always
+				? state->always.size()
+				: state->never.size()));
+		});
+		const auto button = AddButtonWithLabel(
+			inner,
+			std::move(title),
+			std::move(count),
+			st::settingsButtonNoIcon);
+		button->setClickedCallback([=] {
+			EditLocalPrivacyExceptions(
+				controller,
+				always
+					? tr::lng_edit_privacy_lastseen_always_title(tr::now)
+					: tr::lng_edit_privacy_lastseen_never_title(tr::now),
+				always ? state->always : state->never,
+				crl::guard(box, [=](base::flat_set<PeerId> peers) {
+					auto &setTo = always ? state->always : state->never;
+					auto &removeFrom = always ? state->never : state->always;
+					setTo = std::move(peers);
+					for (const auto &id : setTo) {
+						removeFrom.remove(id);
+					}
+					changed->fire({});
+				}));
+		});
+	};
+	addExceptions(true);
+	addExceptions(false);
+	Ui::AddSkip(inner);
+	Ui::AddDividerText(inner, typing
+		? tr::lng_privacy_typing_about()
+		: tr::lng_privacy_read_receipts_about());
+	box->addButton(tr::lng_settings_save(), [=] {
+		auto &settings = session->settings();
+		if (typing) {
+			settings.setTypingPrivacy(
+				group->current() == 1,
+				std::move(state->always),
+				std::move(state->never));
+		} else {
+			settings.setReadReceiptsPrivacy(
+				group->current() == 1,
+				std::move(state->always),
+				std::move(state->never));
+		}
+		session->saveSettingsDelayed();
+		updated();
+		box->closeBox();
+	});
 	box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
 }
 
@@ -852,6 +984,42 @@ void BuildPrivacySection(SectionBuilder &builder) {
 		},
 		.keywords = { u"last seen"_q, u"online"_q },
 	});
+
+	builder.addPrivacyButton({
+		.id = u"privacy/online_status"_q,
+		.title = tr::lng_privacy_online_title(),
+		.key = Key::LastSeen,
+		.controllerFactory = [=] {
+			return std::make_unique<LastSeenPrivacyController>(session);
+		},
+		.keywords = { u"online"_q, u"status"_q },
+	});
+
+	for (const auto kind : {
+			LocalPrivacyKind::Typing,
+			LocalPrivacyKind::ReadReceipts }) {
+		const auto typing = (kind == LocalPrivacyKind::Typing);
+		const auto label = std::make_shared<rpl::variable<QString>>(
+			LocalPrivacyLabel(session->settings(), kind));
+		builder.addButton({
+			.id = typing
+				? u"privacy/typing_status"_q
+				: u"privacy/read_receipts"_q,
+			.title = typing
+				? tr::lng_privacy_typing_title()
+				: tr::lng_privacy_read_receipts_title(),
+			.st = &st::settingsButtonNoIcon,
+			.label = label->value(),
+			.onClick = [=] {
+				controller->show(Box(LocalPrivacyBox, controller, kind, [=] {
+					*label = LocalPrivacyLabel(session->settings(), kind);
+				}));
+			},
+			.keywords = typing
+				? QStringList{ u"typing"_q, u"status"_q }
+				: QStringList{ u"read"_q, u"receipts"_q },
+		});
+	}
 
 	builder.addPrivacyButton({
 		.id = u"privacy/profile_photo"_q,

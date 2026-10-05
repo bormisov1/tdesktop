@@ -122,7 +122,6 @@ class PullToNextChannel;
 struct SelectedQuote;
 class SuggestOptionsBar;
 enum class SuggestMode;
-class PrivacyTogglesRow;
 } // namespace HistoryView
 
 namespace HistoryView::Controls {
@@ -709,7 +708,6 @@ private:
 		TextUpdateEvents events = 0,
 		FieldHistoryAction fieldHistoryAction = FieldHistoryAction::Clear);
 	[[nodiscard]] int fieldHeight() const;
-	[[nodiscard]] int privacyRowHeight() const;
 	[[nodiscard]] bool fieldOrDisabledShown() const;
 	[[nodiscard]] bool fieldHasSendText() const;
 	[[nodiscard]] bool hasSendableContent() const;
@@ -945,7 +943,6 @@ private:
 	object_ptr<Ui::IconButton> _scheduled = { nullptr };
 	std::unique_ptr<HistoryView::Controls::TTLButton> _ttlInfo;
 	const std::unique_ptr<VoiceRecordBar> _voiceRecordBar;
-	const std::unique_ptr<HistoryView::PrivacyTogglesRow> _privacyRow;
 	const std::unique_ptr<ForwardPanel> _forwardPanel;
 	std::unique_ptr<HistoryView::ComposeSearch> _composeSearch;
 	std::unique_ptr<HistoryView::SubsectionTabs> _subsectionTabs;

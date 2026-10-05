@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_channel.h"
 #include "data/data_chat.h"
 #include "data/data_peer_values.h"
+#include "data/data_session.h"
 #include "data/data_user.h"
 #include "history/history.h"
 #include "lang/lang_keys.h"
@@ -602,6 +603,37 @@ void EditNoPaidMessagesExceptions(
 }
 
 } // namespace
+
+void EditLocalPrivacyExceptions(
+		not_null<Window::SessionController*> window,
+		const QString &title,
+		const base::flat_set<PeerId> &selected,
+		Fn<void(base::flat_set<PeerId>)> done) {
+	auto exceptions = Exceptions();
+	for (const auto &id : selected) {
+		exceptions.peers.push_back(window->session().data().peer(id));
+	}
+	auto controller = std::make_unique<PrivacyExceptionsBoxController>(
+		&window->session(),
+		rpl::single(title),
+		exceptions,
+		std::nullopt);
+	auto initBox = [done = std::move(done)](
+			not_null<PeerListBox*> box) {
+		box->addButton(tr::lng_settings_save(), [=] {
+			auto result = base::flat_set<PeerId>();
+			for (const auto &peer : box->collectSelectedRows()) {
+				result.emplace(peer->id);
+			}
+			done(std::move(result));
+			box->closeBox();
+		});
+		box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
+	};
+	window->show(Box<PeerListBox>(
+		std::move(controller),
+		std::move(initBox)));
+}
 
 bool EditPrivacyController::hasOption(Option option) const {
 	return (option != Option::CloseFriends);

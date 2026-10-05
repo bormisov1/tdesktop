@@ -8777,7 +8777,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_folder_archive_failed" = "Failed to create archive.";
 "lng_folder_archive_status" = "ZIP archive";
 
-"lng_privacy_no_read_receipts" = "Send read receipts";
-"lng_privacy_no_typing_status" = "Send typing status";
+"lng_privacy_read_receipts_title" = "Read receipts";
+"lng_privacy_typing_title" = "Typing status";
+"lng_privacy_online_title" = "Online status";
+"lng_privacy_send_status_to" = "Send to";
+"lng_privacy_read_receipts_about" = "Choose who receives your read receipts. This setting is saved on this device and applies to this account.";
+"lng_privacy_typing_about" = "Choose who sees when you are typing. This setting is saved on this device and applies to this account.";
 
 // Keys finished

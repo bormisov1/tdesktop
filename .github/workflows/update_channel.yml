@@ -1,0 +1,363 @@
+name: Update channel.
+
+# Builds a Linux release, packs it into a v2 update envelope signed with
+# the channel Ed25519 key from Telegram/Resources/update/ and publishes it
+# to the gh-pages branch that the clients of this fork poll:
+#
+#   https://bormisov1.github.io/tdesktop/current6
+#   https://bormisov1.github.io/tdesktop/td-update-linux-x64-<version>
+#
+# The signing key is never stored in the repository: it lives in the
+# UPDATE_CHANNEL_KEY secret and is only ever passed to the Packer through
+# a temporary file on the ephemeral runner.
+
+on:
+  push:
+    tags:
+      - 'update-*'
+      - 'test-update-*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Base version to publish, must be greater than the AppVersion of the source.'
+        required: true
+        type: string
+      publish:
+        description: 'Publish to gh-pages (otherwise a dry run that stops after packing).'
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: update-channel-publish
+  cancel-in-progress: false
+
+env:
+  ONLY_CACHE: "false"
+  IMAGE_TAG: tdesktop:centos_env
+
+jobs:
+  update:
+    name: Linux x64
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Clone.
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate release version.
+        id: release
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          PUBLISH_INPUT: ${{ inputs.publish }}
+          TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+          TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
+          elif [[ "$REF_NAME" == update-* ]]; then
+            VERSION="${REF_NAME#update-}"
+          elif [[ "$REF_NAME" == test-update-* ]]; then
+            VERSION="${REF_NAME#test-update-}"
+          else
+            echo "::error::Use workflow_dispatch or an update-/test-update-<version> tag."
+            exit 1
+          fi
+          if [[ ! "$VERSION" =~ ^[1-9][0-9]{0,8}$ ]]; then
+            echo "::error::Version must be a positive integer with at most 9 digits."
+            exit 1
+          fi
+          APP_VERSION=$(sed -n 's/^constexpr auto AppVersion = \([0-9]*\);.*/\1/p' \
+            Telegram/SourceFiles/core/version.h)
+          if [ -z "$APP_VERSION" ] || (( VERSION <= APP_VERSION )); then
+            echo "::error::Version must be greater than AppVersion ($APP_VERSION)."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          PUBLISH=false
+          if [[ "$REF_NAME" == update-* ]] \
+            || { [ "$EVENT_NAME" = workflow_dispatch ] && [ "$PUBLISH_INPUT" = true ]; }; then
+            PUBLISH=true
+          fi
+          echo "publish=$PUBLISH" >> "$GITHUB_OUTPUT"
+          if [ "$PUBLISH" = true ]; then
+            if [[ ! "$TDESKTOP_API_ID" =~ ^[0-9]+$ ]] \
+              || [[ ! "$TDESKTOP_API_HASH" =~ ^[0-9a-fA-F]{32}$ ]]; then
+              echo "::error::Publishing requires TDESKTOP_API_ID and TDESKTOP_API_HASH repository secrets."
+              exit 1
+            fi
+            git fetch --no-tags origin \
+              +refs/heads/custom:refs/remotes/origin/custom
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/custom; then
+              echo "::error::Release tags must point to a commit already in custom."
+              exit 1
+            fi
+          fi
+
+      - name: First set up.
+        run: |
+          sudo apt update
+          curl -sSL https://install.python-poetry.org | python3 -
+          curl -sSL https://github.com/ccache/ccache/releases/download/v4.13.6/ccache-4.13.6-linux-x86_64-glibc.tar.xz \
+          | sudo tar xJ -C /usr/local/bin --strip-components=1 ccache-4.13.6-linux-x86_64-glibc/ccache
+          echo "CCACHE_DIR=$RUNNER_TEMP/.tdesktop-cache" >> $GITHUB_ENV
+          cd Telegram/build/docker/centos_env
+          poetry install
+          DOCKERFILE=$(DEBUG= LTO= poetry run gen_dockerfile)
+          echo "$DOCKERFILE" > Dockerfile
+          rm -rf __pycache__
+
+      - name: Free up some disk space.
+        uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6
+        with:
+          tool-cache: true
+
+      - name: Set up Docker Buildx.
+        id: setup-buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Libraries cache.
+        id: cache-libs
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ runner.temp }}/.buildx-cache
+            ${{ runner.temp }}/.mount-cache
+          key: ${{ runner.OS }}-libs-${{ hashFiles('Telegram/build/docker/centos_env/**') }}
+          restore-keys: ${{ runner.OS }}-libs-
+
+      - name: Restore Docker cache mounts.
+        uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723
+        with:
+          builder: ${{ steps.setup-buildx.outputs.name }}
+          cache-dir: ${{ runner.temp }}/.mount-cache
+          dockerfile: Telegram/build/docker/centos_env/Dockerfile
+          skip-extraction: ${{ steps.cache-libs.outputs.cache-hit }}
+
+      - name: Libraries.
+        uses: docker/build-push-action@v7
+        with:
+          context: Telegram/build/docker/centos_env
+          load: ${{ env.ONLY_CACHE == 'false' }}
+          tags: ${{ env.IMAGE_TAG }}
+          cache-from: type=local,src=${{ runner.temp }}/.buildx-cache
+          cache-to: type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max
+
+      - name: Move cache.
+        run: |
+          rm -rf ${{ runner.temp }}/.buildx-cache
+          mv ${{ runner.temp }}/.buildx-cache{-new,}
+
+      - name: Restore Telegram Desktop cache.
+        id: cache-tdesktop
+        if: env.ONLY_CACHE == 'false'
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.OS }}-tdesktop-release-${{ github.run_id }}
+          restore-keys: ${{ runner.OS }}-tdesktop-release-
+
+      - name: Generate a stub DesktopPrivate.
+        run: |
+          mkdir -p ../DesktopPrivate
+          random_key() {
+            printf -- '-----BEGIN RSA PRIVATE KEY-----\\n%s\\n-----END RSA PRIVATE KEY-----\\n' \
+              "$(head -c 96 /dev/urandom | base64 | tr -d '\n')"
+          }
+          printf 'const char *PrivateKey = "%s";\nconst char *PrivateBetaKey = "%s";\n' \
+            "$(random_key)" "$(random_key)" > ../DesktopPrivate/packer_private.h
+          printf 'static const char *AlphaPrivateKey = "%s";\n' \
+            "$(random_key)" > ../DesktopPrivate/alpha_private.h
+
+      - name: Telegram Desktop build.
+        if: env.ONLY_CACHE == 'false'
+        env:
+          PUBLISH_UPDATE: ${{ steps.release.outputs.publish }}
+          TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+          TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+        run: |
+          ccache -z
+          API_ARGS=()
+          if [ "$PUBLISH_UPDATE" = true ]; then
+            API_ARGS+=(-D "TDESKTOP_API_ID=$TDESKTOP_API_ID")
+            API_ARGS+=(-D "TDESKTOP_API_HASH=$TDESKTOP_API_HASH")
+          else
+            API_ARGS+=(-D TDESKTOP_API_TEST=ON)
+          fi
+
+          # GCC 15 false-positive in the range-v3 QJsonArray transform.
+          docker run --rm \
+          -u $(id -u) \
+          -v $PWD:/usr/src/tdesktop \
+          -v $PWD/../DesktopPrivate:/usr/src/DesktopPrivate \
+          -v ${{ env.CCACHE_DIR }}:/var/cache/ccache \
+          -e CONFIG=Release \
+          -e KEEP_GOING=1 \
+          -e CCACHE_SLOPPINESS=pch_defines,time_macros \
+          $IMAGE_TAG \
+          env -u CCACHE_DISABLE /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+          -D CMAKE_CONFIGURATION_TYPES=Release \
+          -D CMAKE_COMPILE_WARNING_AS_ERROR=ON \
+          -D CMAKE_CXX_FLAGS=-Wno-error=aggressive-loop-optimizations \
+          -D DESKTOP_APP_SPECIAL_TARGET=linux \
+          -D TDESKTOP_BUILD_UPDATE_TESTS=ON \
+          -D DESKTOP_APP_DISABLE_AUTOUPDATE=OFF \
+          -D DESKTOP_APP_DISABLE_CRASH_REPORTS=OFF \
+          "${API_ARGS[@]}"
+
+      - name: Count ccache misses.
+        id: ccache-stats
+        if: env.ONLY_CACHE == 'false'
+        run: |
+          MISSES=$(ccache --print-stats | sed -n 's/^cache_miss\t//p' | head -1)
+          case "$MISSES" in (*[!0-9]*|'') MISSES=0;; esac
+          echo "misses=$MISSES" >> $GITHUB_OUTPUT
+          echo "ccache misses this run: $MISSES"
+
+      - name: Trim Telegram Desktop cache.
+        if: env.ONLY_CACHE == 'false'
+        run: ccache --evict-older-than 3d
+
+      - name: Save Telegram Desktop cache.
+        if: env.ONLY_CACHE == 'false'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.cache-tdesktop.outputs.cache-primary-key }}
+
+      - name: Check.
+        if: env.ONLY_CACHE == 'false'
+        run: |
+          filePath="out/Release/Telegram"
+          if test -f "$filePath"; then
+            echo "Build successfully done! :)"
+
+            size=$(stat -c %s "$filePath")
+            echo "File size of ${filePath}: ${size} Bytes."
+          else
+            echo "Build error, output file does not exist."
+            exit 1
+          fi
+
+      - name: Verify the update trust chain.
+        run: |
+          # The same focused tests the canary release runs, against the
+          # trust files committed in Telegram/Resources/update.
+          out/Release/test_update_verify
+          out/Release/test_update_unpack
+
+      - name: Write the signing key.
+        if: steps.release.outputs.publish == 'true'
+        env:
+          UPDATE_CHANNEL_KEY: ${{ secrets.UPDATE_CHANNEL_KEY }}
+        run: |
+          if test -z "$UPDATE_CHANNEL_KEY"; then
+            echo "::error::The UPDATE_CHANNEL_KEY secret is not set."
+            exit 1
+          fi
+          printf -- '%s' "$UPDATE_CHANNEL_KEY" > "$RUNNER_TEMP/channel-private.pem"
+          chmod 600 "$RUNNER_TEMP/channel-private.pem"
+
+      - name: Pack the update.
+        id: pack
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          PUBLISH_UPDATE: ${{ steps.release.outputs.publish }}
+        run: |
+          trap 'rm -f "$RUNNER_TEMP/channel-private.pem" "$RUNNER_TEMP/signing-input.bin"' EXIT
+          cd out/Release
+          KEY_ID=$(python3 -c 'import json; \
+            groups = json.load(open("../../Telegram/Resources/update/manifest.min.json")) \
+              ["channels"]["stable"]; \
+            assert len(groups) == 1, "the stable channel needs exactly one signature group"; \
+            print(groups[0][0])')
+          echo "Signing key id from the manifest: $KEY_ID"
+          PACKAGE="td-update-linux-x64-${RELEASE_VERSION}"
+          if [ "$PUBLISH_UPDATE" = true ]; then
+            ./Packer -path Telegram -path Updater \
+              -version "$RELEASE_VERSION" \
+              -channel stable \
+              -keys-loc ../../Telegram/Resources/update \
+              -local-key "$RUNNER_TEMP/channel-private.pem" \
+              -local-key-id "$KEY_ID"
+          else
+            ./Packer -path Telegram -path Updater \
+              -version "$RELEASE_VERSION" \
+              -channel stable \
+              -keys-loc ../../Telegram/Resources/update \
+              -emit-signing-input "$RUNNER_TEMP/signing-input.bin"
+            PACKAGE="${PACKAGE}.unsigned"
+          fi
+          echo "package=$PACKAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Remove temporary signing files.
+        if: always()
+        run: rm -f "$RUNNER_TEMP/channel-private.pem" "$RUNNER_TEMP/signing-input.bin"
+
+      - name: Write the feed.
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          PACKAGE: ${{ steps.pack.outputs.package }}
+        run: |
+          cd out/Release
+          test -f "$PACKAGE"
+          printf '{"linux":{"stable":{"released":%s,"link":"%s"}}}\n' \
+            "$RELEASE_VERSION" "$PACKAGE" > current6
+          cat current6
+
+      - name: Upload the update package.
+        uses: actions/upload-artifact@v7
+        with:
+          name: td-update-linux-x64-${{ steps.release.outputs.version }}
+          path: |
+            out/Release/Telegram
+            out/Release/Updater
+            out/Release/${{ steps.pack.outputs.package }}
+            out/Release/current6
+          if-no-files-found: error
+
+      - name: Publish to gh-pages.
+        if: steps.release.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          PACKAGE: ${{ steps.pack.outputs.package }}
+        run: |
+          cat > "$RUNNER_TEMP/git-askpass.sh" <<'EOF'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' x-access-token ;;
+            *) printf '%s\n' "$GH_TOKEN" ;;
+          esac
+          EOF
+          chmod 700 "$RUNNER_TEMP/git-askpass.sh"
+          export GIT_ASKPASS="$RUNNER_TEMP/git-askpass.sh"
+          export GIT_TERMINAL_PROMPT=0
+          trap 'rm -f "$RUNNER_TEMP/git-askpass.sh"' EXIT
+          git remote set-url origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git fetch --depth=1 origin gh-pages
+          git worktree add --detach "$RUNNER_TEMP/pages" FETCH_HEAD
+          cd "$RUNNER_TEMP/pages"
+          if [ -f current6 ]; then
+            CURRENT_VERSION=$(python3 -c 'import json; print(json.load(open("current6"))["linux"]["stable"]["released"])')
+            if (( RELEASE_VERSION <= CURRENT_VERSION )); then
+              echo "::error::Version $RELEASE_VERSION is not newer than published version $CURRENT_VERSION."
+              exit 1
+            fi
+          fi
+          cp "$GITHUB_WORKSPACE/out/Release/$PACKAGE" .
+          cp "$GITHUB_WORKSPACE/out/Release/current6" .
+          echo "Published on $(date -u +%FT%TZ), version $RELEASE_VERSION." > VERSION
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git commit -m "publish $PACKAGE"
+          git push origin HEAD:gh-pages

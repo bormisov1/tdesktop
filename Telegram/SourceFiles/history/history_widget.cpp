@@ -118,7 +118,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/controls/history_view_compose_search.h"
 #include "history/view/controls/history_view_forward_panel.h"
 #include "history/view/controls/history_view_draft_options.h"
-#include "history/view/controls/history_view_privacy_toggles.h"
 #include "history/view/controls/history_view_suggest_options.h"
 #include "history/view/controls/history_view_ttl_button.h"
 #include "history/view/controls/history_view_voice_record_bar.h"
@@ -328,9 +327,6 @@ HistoryWidget::HistoryWidget(
 	controller->uiShow(),
 	_send,
 	st::historySendSize.height()))
-, _privacyRow(std::make_unique<HistoryView::PrivacyTogglesRow>(
-	&session(),
-	this))
 , _forwardPanel(std::make_unique<ForwardPanel>([=] { updateField(); }))
 , _field(
 	this,
@@ -377,12 +373,6 @@ HistoryWidget::HistoryWidget(
 		return _list && _list->itemTop(view) >= 0;
 	}))
 , _topShadow(this) {
-	_privacyRow->addToggle(
-		HistoryView::PrivacyTogglesRow::Toggle::SendReadReceipts,
-		tr::lng_privacy_no_read_receipts(tr::now));
-	_privacyRow->addToggle(
-		HistoryView::PrivacyTogglesRow::Toggle::SendTypingStatus,
-		tr::lng_privacy_no_typing_status(tr::now));
 	setAcceptDrops(true);
 	setVisualTabOrder(true);
 
@@ -3561,7 +3551,6 @@ void HistoryWidget::setHistory(History *history) {
 		if (_history) {
 			setupPreview();
 			trackThreadFieldVisibility();
-			_privacyRow->setPeer(_history->peer);
 			updateControlsGeometry();
 		} else {
 			_previewDrawPreview = nullptr;
@@ -7233,12 +7222,6 @@ int HistoryWidget::fieldHeight() const {
 		: (st::historySendSize.height() - 2 * st::historySendPadding);
 }
 
-int HistoryWidget::privacyRowHeight() const {
-	return (_privacyRow->isDisplayed() && !_field->isHidden())
-		? _privacyRow->rowHeight()
-		: 0;
-}
-
 bool HistoryWidget::fieldOrDisabledShown() const {
 	return !_field->isHidden() || !_richDraftPreview->isHidden() || _fieldDisabled;
 }
@@ -7425,12 +7408,6 @@ void HistoryWidget::moveFieldControls() {
 		bottom -= keyboardHeight;
 		_kbScroll->setGeometryToLeft(0, bottom, width(), keyboardHeight);
 	}
-
-	_privacyRow->resizeToWidth(width());
-	bottom -= privacyRowHeight();
-	_privacyRow->setVisible(
-		_privacyRow->isDisplayed() && !_field->isHidden());
-	_privacyRow->moveToLeft(0, bottom);
 
 // (_botMenu.button) (_attachToggle|_replaceMedia) (_sendAs) ---- _inlineResults ------------------------------ _tabbedPanel ------ _fieldBarCancel
 // (_attachDocument|_attachPhoto) _field (_ttlInfo) (_scheduled) (_giftToUser) (_silent|_cmdStart|_kbShow) (_toggleSuggestPost) (_kbHide|_tabbedSelectorToggle) _send
@@ -8491,8 +8468,7 @@ void HistoryWidget::updateHistoryGeometry(
 	} else {
 		if (editingMessage() || _canSendMessages) {
 			newScrollHeight -= (fieldHeight()
-				+ 2 * st::historySendPadding
-				+ privacyRowHeight());
+				+ 2 * st::historySendPadding);
 		} else if (_sendRestriction) {
 			newScrollHeight -= _sendRestriction->height();
 		}
@@ -8938,7 +8914,6 @@ int HistoryWidget::computeMaxFieldHeight() const {
 			? st::historyReplyHeight
 			: 0)
 		- (2 * st::historySendPadding)
-		- privacyRowHeight()
 		- st::historyReplyHeight; // at least this height for history.
 	return std::min(st::historyComposeFieldMaxHeight, available);
 }
@@ -11155,8 +11130,7 @@ void HistoryWidget::drawField(Painter &p, const QRect &rect) {
 	_repaintFieldScheduled = false;
 
 	auto backy = _field->y() - st::historySendPadding;
-	auto backh = fieldHeight() + 2 * st::historySendPadding
-		+ privacyRowHeight();
+	auto backh = fieldHeight() + 2 * st::historySendPadding;
 	auto hasForward = readyToForward();
 	auto drawMsgText = (_editMsgId || _replyTo) ? _replyEditMsg : _kbReplyTo;
 	if (_editMsgId

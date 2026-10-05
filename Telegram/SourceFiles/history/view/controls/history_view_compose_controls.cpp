@@ -83,7 +83,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/controls/history_view_compose_ai_tooltip.h"
 #include "history/view/controls/history_view_compose_media_edit_manager.h"
 #include "history/view/controls/history_view_forward_panel.h"
-#include "history/view/controls/history_view_privacy_toggles.h"
 #include "history/view/controls/history_view_rich_draft_preview.h"
 #include "history/view/controls/history_view_draft_options.h"
 #include "history/view/controls/history_view_suggest_options.h"
@@ -1290,9 +1289,6 @@ ComposeControls::ComposeControls(
 	_wrap.get(),
 	_show,
 	[=] { return _field->isVisible() && HasSendText(_field); }))
-, _privacyRow(std::make_unique<PrivacyTogglesRow>(
-	&session(),
-	_wrap.get()))
 , _voiceRecordBar(std::make_unique<VoiceRecordBar>(
 	_wrap.get(),
 	Controls::VoiceRecordBarDescriptor{
@@ -1312,12 +1308,6 @@ ComposeControls::ComposeControls(
 , _unavailableEmojiPasted(std::move(descriptor.unavailableEmojiPasted))
 , _saveDraftTimer([=] { saveDraft(); })
 , _saveCloudDraftTimer([=] { saveCloudDraft(); }) {
-	_privacyRow->addToggle(
-		PrivacyTogglesRow::Toggle::SendReadReceipts,
-		tr::lng_privacy_no_read_receipts(tr::now));
-	_privacyRow->addToggle(
-		PrivacyTogglesRow::Toggle::SendTypingStatus,
-		tr::lng_privacy_no_typing_status(tr::now));
 	if (_st.radius > 0) {
 		_backgroundRect.emplace(_st.radius, _st.bg);
 	}
@@ -1555,7 +1545,6 @@ void ComposeControls::setHistory(SetHistoryArgs &&args) {
 		return;
 	}
 	const auto peer = _history->peer;
-	_privacyRow->setPeer(peer);
 	updateHeight();
 	initSendAsButton(peer, args.videoStream);
 	if (peer->isChat() && peer->asChat()->noParticipantInfo()) {
@@ -4920,9 +4909,7 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 		&& !_commentsShown->isHidden();
 	const auto giftToUser = _giftToUser
 		&& !_giftToUser->isHidden();
-	_privacyRow->resizeToWidth(size.width());
-	const auto privacyRowHeight = _privacyRow->rowHeight();
-	const auto bottom = size.height() - privacyRowHeight;
+	const auto bottom = size.height();
 	const auto fieldWidth = size.width()
 		- (commentsShown
 			? (_commentsShown->width() + _st.commentsSkip)
@@ -5005,8 +4992,6 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 		_fieldDisabled->resize(size.width(), st::historySendSize.height());
 		_fieldDisabled->moveToLeft(left, fieldTop);
 	}
-
-	_privacyRow->moveToLeft(0, bottom);
 
 	_header->resizeToWidth(size.width());
 	_header->moveToLeft(
@@ -5753,12 +5738,10 @@ int ComposeControls::composeFieldHeight() const {
 }
 
 void ComposeControls::updateHeight() {
-	_privacyRow->resizeToWidth(_wrap->width());
 	const auto height = (_header->isDisplayed() ? _header->height() : 0)
 		+ _st.padding.top()
 		+ composeFieldHeight()
-		+ _st.padding.bottom()
-		+ _privacyRow->rowHeight();
+		+ _st.padding.bottom();
 	if (height != _wrap->height()) {
 		_wrap->resize(_wrap->width(), height);
 	}
