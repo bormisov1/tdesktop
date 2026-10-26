@@ -732,61 +732,6 @@ void RegisterSettingsHandlers(Router &router) {
 	});
 
 	router.add(u"settings"_q, {
-		.path = u"privacy/last-seen"_q,
-		.action = CodeBlock{ [](const Context &ctx) {
-			if (!ctx.controller) {
-				return Result::NeedsAuth;
-			}
-			return ShowPrivacyBox(
-				ctx,
-				PrivacyKey::LastSeen,
-				[=] { return std::make_unique<::Settings::LastSeenPrivacyController>(&ctx.controller->session()); });
-		}},
-	});
-
-	router.add(u"settings"_q, {
-		.path = u"privacy/last-seen/never"_q,
-		.action = CodeBlock{ [](const Context &ctx) {
-			if (!ctx.controller) {
-				return Result::NeedsAuth;
-			}
-			return ShowPrivacyBox(
-				ctx,
-				PrivacyKey::LastSeen,
-				[=] { return std::make_unique<::Settings::LastSeenPrivacyController>(&ctx.controller->session()); },
-				u"privacy/never"_q);
-		}},
-	});
-
-	router.add(u"settings"_q, {
-		.path = u"privacy/last-seen/always"_q,
-		.action = CodeBlock{ [](const Context &ctx) {
-			if (!ctx.controller) {
-				return Result::NeedsAuth;
-			}
-			return ShowPrivacyBox(
-				ctx,
-				PrivacyKey::LastSeen,
-				[=] { return std::make_unique<::Settings::LastSeenPrivacyController>(&ctx.controller->session()); },
-				u"privacy/always"_q);
-		}},
-	});
-
-	router.add(u"settings"_q, {
-		.path = u"privacy/last-seen/hide-read-time"_q,
-		.action = CodeBlock{ [](const Context &ctx) {
-			if (!ctx.controller) {
-				return Result::NeedsAuth;
-			}
-			return ShowPrivacyBox(
-				ctx,
-				PrivacyKey::LastSeen,
-				[=] { return std::make_unique<::Settings::LastSeenPrivacyController>(&ctx.controller->session()); },
-				u"privacy/hide-read-time"_q);
-		}},
-	});
-
-	router.add(u"settings"_q, {
 		.path = u"privacy/profile-photos"_q,
 		.action = CodeBlock{ [](const Context &ctx) {
 			return ShowPrivacyBox(

@@ -92,48 +92,12 @@ public:
 		_groupEmojiSectionHidden.remove(peerId);
 	}
 
-	[[nodiscard]] bool noReadReceipts(PeerId peerId) const {
-		return _noReadReceipts.contains(peerId)
-			|| (!_readReceiptsEveryone && !_readReceiptsAlways.contains(peerId));
-	}
-	[[nodiscard]] bool readReceiptsEveryone() const {
-		return _readReceiptsEveryone;
-	}
-	[[nodiscard]] const base::flat_set<PeerId> &readReceiptsAlways() const {
-		return _readReceiptsAlways;
-	}
-	[[nodiscard]] const base::flat_set<PeerId> &readReceiptsNever() const {
-		return _noReadReceipts;
-	}
-	void setReadReceiptsPrivacy(
-			bool everyone,
-			base::flat_set<PeerId> always,
-			base::flat_set<PeerId> never) {
-		_readReceiptsEveryone = everyone;
-		_readReceiptsAlways = std::move(always);
-		_noReadReceipts = std::move(never);
+	[[nodiscard]] bool noReadReceipts(PeerId) const {
+		return true;
 	}
 
-	[[nodiscard]] bool noTyping(PeerId peerId) const {
-		return _noTyping.contains(peerId)
-			|| (!_typingEveryone && !_typingAlways.contains(peerId));
-	}
-	[[nodiscard]] bool typingEveryone() const {
-		return _typingEveryone;
-	}
-	[[nodiscard]] const base::flat_set<PeerId> &typingAlways() const {
-		return _typingAlways;
-	}
-	[[nodiscard]] const base::flat_set<PeerId> &typingNever() const {
-		return _noTyping;
-	}
-	void setTypingPrivacy(
-			bool everyone,
-			base::flat_set<PeerId> always,
-			base::flat_set<PeerId> never) {
-		_typingEveryone = everyone;
-		_typingAlways = std::move(always);
-		_noTyping = std::move(never);
+	[[nodiscard]] bool noTyping(PeerId) const {
+		return true;
 	}
 
 	[[nodiscard]] Data::AutoDownload::Full &autoDownload() {
@@ -260,12 +224,6 @@ private:
 	ChatHelpers::SelectorTab _selectorTab; // per-window
 	base::flat_set<PeerId> _groupStickersSectionHidden;
 	base::flat_set<PeerId> _groupEmojiSectionHidden;
-	base::flat_set<PeerId> _noReadReceipts;
-	base::flat_set<PeerId> _noTyping;
-	base::flat_set<PeerId> _readReceiptsAlways;
-	base::flat_set<PeerId> _typingAlways;
-	bool _readReceiptsEveryone = true;
-	bool _typingEveryone = true;
 	bool _hadLegacyCallsPeerToPeerNobody = false;
 	Data::AutoDownload::Full _autoDownload;
 	rpl::variable<bool> _archiveCollapsed = false;

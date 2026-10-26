@@ -95,15 +95,6 @@ QByteArray SessionSettings::serialize() const {
 	for (const auto &id : _extraFavoriteReactions) {
 		size += sizeof(quint64) + Serialize::stringSize(id.emoji());
 	}
-	size += sizeof(qint32) // _noReadReceipts size
-		+ _noReadReceipts.size() * sizeof(quint64);
-	size += sizeof(qint32) // _noTyping size
-		+ _noTyping.size() * sizeof(quint64);
-	size += sizeof(qint32) * 2
-		+ sizeof(qint32) * 2
-		+ (_readReceiptsAlways.size() + _typingAlways.size())
-			* sizeof(quint64);
-
 	auto result = QByteArray();
 	result.reserve(size);
 	{
@@ -195,25 +186,6 @@ QByteArray SessionSettings::serialize() const {
 		for (const auto &id : _extraFavoriteReactions) {
 			stream << quint64(id.custom()) << id.emoji();
 		}
-		stream << qint32(_noReadReceipts.size());
-		for (const auto &peerId : _noReadReceipts) {
-			stream << SerializePeerId(peerId);
-		}
-		stream << qint32(_noTyping.size());
-		for (const auto &peerId : _noTyping) {
-			stream << SerializePeerId(peerId);
-		}
-		stream
-			<< qint32(_readReceiptsEveryone ? 1 : 0)
-			<< qint32(_typingEveryone ? 1 : 0)
-			<< qint32(_readReceiptsAlways.size());
-		for (const auto &peerId : _readReceiptsAlways) {
-			stream << SerializePeerId(peerId);
-		}
-		stream << qint32(_typingAlways.size());
-		for (const auto &peerId : _typingAlways) {
-			stream << SerializePeerId(peerId);
-		}
 	}
 
 	Ensures(result.size() == size);
@@ -290,13 +262,6 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	qint32 disableSharingBoxShowsCount = 0;
 	qint32 phoneNumberHidden = 0;
 	std::vector<Data::ReactionId> extraFavoriteReactions;
-	base::flat_set<PeerId> noReadReceipts;
-	base::flat_set<PeerId> noTyping;
-	base::flat_set<PeerId> readReceiptsAlways;
-	base::flat_set<PeerId> typingAlways;
-	auto readReceiptsEveryone = qint32(1);
-	auto typingEveryone = qint32(1);
-
 	stream >> versionTag;
 	if (versionTag == kVersionTag) {
 		stream >> version;
@@ -778,60 +743,6 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 			}
 		}
 	}
-	if (!stream.atEnd()) {
-		auto count = qint32(0);
-		stream >> count;
-		if (stream.status() == QDataStream::Ok) {
-			for (auto i = 0; i != count; ++i) {
-				auto peerId = quint64();
-				stream >> peerId;
-				if (stream.status() != QDataStream::Ok) {
-					LOG(("App Error: "
-						"Bad data for SessionSettings::addFromSerialized()"
-						"with noReadReceipts"));
-					return;
-				}
-				noReadReceipts.emplace(
-					DeserializePeerId(peerId));
-			}
-		}
-	}
-	if (!stream.atEnd()) {
-		auto count = qint32(0);
-		stream >> count;
-		if (stream.status() == QDataStream::Ok) {
-			for (auto i = 0; i != count; ++i) {
-				auto peerId = quint64();
-				stream >> peerId;
-				if (stream.status() != QDataStream::Ok) {
-					LOG(("App Error: "
-						"Bad data for SessionSettings::addFromSerialized()"
-						"with noTyping"));
-					return;
-				}
-				noTyping.emplace(
-					DeserializePeerId(peerId));
-			}
-		}
-	}
-	if (!stream.atEnd()) {
-		stream >> readReceiptsEveryone >> typingEveryone;
-		for (auto *set : { &readReceiptsAlways, &typingAlways }) {
-			auto count = qint32(0);
-			stream >> count;
-			if (count < 0 || stream.status() != QDataStream::Ok) {
-				return;
-			}
-			for (auto i = 0; i != count; ++i) {
-				auto peerId = quint64();
-				stream >> peerId;
-				if (stream.status() != QDataStream::Ok) {
-					return;
-				}
-				set->emplace(DeserializePeerId(peerId));
-			}
-		}
-	}
 	if (stream.status() != QDataStream::Ok) {
 		LOG(("App Error: "
 			"Bad data for SessionSettings::addFromSerialized()"));
@@ -898,13 +809,6 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	_disableSharingBoxShowsCount = disableSharingBoxShowsCount;
 	_phoneNumberHidden = (phoneNumberHidden == 1);
 	_extraFavoriteReactions = std::move(extraFavoriteReactions);
-	_noReadReceipts = std::move(noReadReceipts);
-	_noTyping = std::move(noTyping);
-	_readReceiptsAlways = std::move(readReceiptsAlways);
-	_typingAlways = std::move(typingAlways);
-	_readReceiptsEveryone = (readReceiptsEveryone == 1);
-	_typingEveryone = (typingEveryone == 1);
-
 	if (version < 2) {
 		app.setLastSeenWarningSeen(appLastSeenWarningSeen == 1);
 		for (const auto &[key, value] : appSoundOverrides) {

@@ -995,13 +995,12 @@ void Updates::updateOnline(crl::time lastNonIdleTime, bool gotOtherOffline) {
 	});
 
 	const auto &config = _session->serverConfig();
-	bool isOnline = Core::App().hasActiveWindow(&session());
+	const auto active = Core::App().hasActiveWindow(&session());
 	int updateIn = config.onlineUpdatePeriod;
 	Assert(updateIn >= 0);
-	if (isOnline) {
+	if (active) {
 		const auto idle = crl::now() - lastNonIdleTime;
 		if (idle >= config.offlineIdleTimeout) {
-			isOnline = false;
 			if (!isIdle()) {
 				_isIdle = true;
 				_idleFinishTimer.callOnce(900);
@@ -1013,8 +1012,10 @@ void Updates::updateOnline(crl::time lastNonIdleTime, bool gotOtherOffline) {
 			Assert(updateIn >= 0);
 		}
 	}
+	const auto isOnline = false;
 	auto ms = crl::now();
-	if (isOnline != _lastWasOnline
+	if (!_lastSetOnline
+		|| isOnline != _lastWasOnline
 		|| (isOnline && _lastSetOnline + config.onlineUpdatePeriod <= ms)
 		|| (isOnline && gotOtherOffline)) {
 		api().request(base::take(_onlineRequest)).cancel();
