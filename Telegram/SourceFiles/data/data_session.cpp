@@ -3342,58 +3342,14 @@ void Session::checkFormattedDateUpdates() {
 void Session::processMessagesDeleted(
 		PeerId peerId,
 		const QVector<MTPint> &data) {
-	const auto list = messagesList(peerId);
-	const auto affected = historyLoaded(peerId);
-	if (!list && !affected) {
-		return;
-	}
-
-	auto toDestroy = std::vector<not_null<HistoryItem*>>();
-	auto historiesToCheck = base::flat_set<not_null<History*>>();
-	for (const auto &messageId : data) {
-		const auto i = list ? list->find(messageId.v) : Messages::iterator();
-		if (list && i != list->end()) {
-			const auto history = i->second->history();
-			toDestroy.push_back(i->second);
-			historiesToCheck.emplace(history);
-		} else if (affected) {
-			affected->unknownMessageDeleted(messageId.v);
-		}
-	}
-	if (!toDestroy.empty()) {
-		notifyItemsAboutToBeDestroyed(toDestroy);
-		for (const auto &item : toDestroy) {
-			item->destroy();
-		}
-	}
-	for (const auto &history : historiesToCheck) {
-		if (!history->chatListMessageKnown()) {
-			history->requestChatListMessage();
-		}
-	}
+	Q_UNUSED(peerId);
+	LOG(("Ignoring server-side channel message deletion for %1 item(s).")
+		.arg(data.size()));
 }
 
 void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
-	auto toDestroy = std::vector<not_null<HistoryItem*>>();
-	auto historiesToCheck = base::flat_set<not_null<History*>>();
-	for (const auto &messageId : data) {
-		if (const auto item = nonChannelMessage(messageId.v)) {
-			const auto history = item->history();
-			toDestroy.push_back(item);
-			historiesToCheck.emplace(history);
-		}
-	}
-	if (!toDestroy.empty()) {
-		notifyItemsAboutToBeDestroyed(toDestroy);
-		for (const auto &item : toDestroy) {
-			item->destroy();
-		}
-	}
-	for (const auto &history : historiesToCheck) {
-		if (!history->chatListMessageKnown()) {
-			history->requestChatListMessage();
-		}
-	}
+	LOG(("Ignoring server-side message deletion for %1 item(s).")
+		.arg(data.size()));
 }
 
 void Session::removeDependencyMessage(not_null<HistoryItem*> item) {
