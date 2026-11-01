@@ -1545,6 +1545,7 @@ void ComposeControls::setHistory(SetHistoryArgs &&args) {
 		return;
 	}
 	const auto peer = _history->peer;
+	updateHeight();
 	initSendAsButton(peer, args.videoStream);
 	if (peer->isChat() && peer->asChat()->noParticipantInfo()) {
 		session().api().requestFullPeer(peer);
@@ -5036,6 +5037,7 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 		&& !_commentsShown->isHidden();
 	const auto giftToUser = _giftToUser
 		&& !_giftToUser->isHidden();
+	const auto bottom = size.height();
 	const auto fieldWidth = size.width()
 		- (commentsShown
 			? (_commentsShown->width() + _st.commentsSkip)
@@ -5084,7 +5086,7 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 		}
 	}
 
-	const auto buttonsTop = size.height() - _st.attach.height;
+	const auto buttonsTop = bottom - _st.attach.height;
 
 	auto left = 0;
 	if (commentsShown) {
@@ -5109,7 +5111,7 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 		left += _sendAs->width();
 	}
 	const auto fieldHeight = composeFieldHeight();
-	const auto fieldTop = size.height() - _st.padding.bottom() - fieldHeight;
+	const auto fieldTop = bottom - _st.padding.bottom() - fieldHeight;
 	_field->moveToLeft(left, fieldTop);
 	if (_richDraftPreview) {
 		_richDraftPreview->moveToLeft(left, fieldTop);
@@ -5196,9 +5198,7 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 	updateDiscardRichDraftGeometry();
 
 	_voiceRecordBar->resizeToWidth(size.width());
-	_voiceRecordBar->moveToLeft(
-		0,
-		size.height() - _voiceRecordBar->height());
+	_voiceRecordBar->moveToLeft(0, bottom - _voiceRecordBar->height());
 }
 
 void ComposeControls::updateControlsVisibility() {

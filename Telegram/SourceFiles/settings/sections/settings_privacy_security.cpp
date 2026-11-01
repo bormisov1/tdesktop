@@ -818,16 +818,6 @@ void BuildPrivacySection(SectionBuilder &builder) {
 	});
 
 	builder.addPrivacyButton({
-		.id = u"privacy/last_seen"_q,
-		.title = tr::lng_settings_last_seen(),
-		.key = Key::LastSeen,
-		.controllerFactory = [=] {
-			return std::make_unique<LastSeenPrivacyController>(session);
-		},
-		.keywords = { u"last seen"_q, u"online"_q },
-	});
-
-	builder.addPrivacyButton({
 		.id = u"privacy/profile_photo"_q,
 		.title = tr::lng_settings_profile_photo_privacy(),
 		.key = Key::ProfilePhoto,

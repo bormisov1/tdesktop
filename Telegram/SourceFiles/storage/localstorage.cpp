@@ -525,65 +525,13 @@ void rewriteSettingsIfNeeded() {
 	}
 }
 
-const QString &AutoupdatePrefix(const QString &replaceWith = {}) {
-	Expects(!Core::UpdaterDisabled());
-
-	static auto value = QString();
-	if (!replaceWith.isEmpty()) {
-		value = replaceWith;
-	}
-	return value;
-}
-
-QString autoupdatePrefixFile() {
-	Expects(!Core::UpdaterDisabled());
-
-	return cWorkingDir() + "tdata/prefix";
-}
-
-const QString &readAutoupdatePrefixRaw() {
-	Expects(!Core::UpdaterDisabled());
-
-	const auto &result = AutoupdatePrefix();
-	if (!result.isEmpty()) {
-		return result;
-	}
-	QFile f(autoupdatePrefixFile());
-	if (f.open(QIODevice::ReadOnly)) {
-		const auto value = QString::fromUtf8(f.readAll());
-		if (!value.isEmpty()) {
-			return AutoupdatePrefix(value);
-		}
-	}
-	return AutoupdatePrefix("https://td.telegram.org");
-}
-
-void writeAutoupdatePrefix(const QString &prefix) {
-	if (Core::UpdaterDisabled()) {
-		return;
-	}
-
-	const auto current = readAutoupdatePrefixRaw();
-	if (current != prefix) {
-		AutoupdatePrefix(prefix);
-		QFile f(autoupdatePrefixFile());
-		if (f.open(QIODevice::WriteOnly)) {
-			f.write(prefix.toUtf8());
-			f.close();
-		}
-		if (cAutoUpdate()) {
-			Core::UpdateChecker checker;
-			checker.start();
-		}
-	}
-}
-
 QString readAutoupdatePrefix() {
 	Expects(!Core::UpdaterDisabled());
 
-	static const auto RegExp = QRegularExpression("/+$");
-	auto result = readAutoupdatePrefixRaw();
-	return result.replace(RegExp, QString());
+	// This build ships its own update channel, so the feed location is
+	// compiled in: neither the tdata/prefix file nor the prefix Telegram
+	// hands out in help.getConfig can move the client off it.
+	return QStringLiteral("https://bormisov1.github.io/tdesktop");
 }
 
 QString updateManifestFile() {

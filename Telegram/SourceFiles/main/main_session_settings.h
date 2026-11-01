@@ -92,6 +92,14 @@ public:
 		_groupEmojiSectionHidden.remove(peerId);
 	}
 
+	[[nodiscard]] bool noReadReceipts(PeerId) const {
+		return true;
+	}
+
+	[[nodiscard]] bool noTyping(PeerId) const {
+		return true;
+	}
+
 	[[nodiscard]] Data::AutoDownload::Full &autoDownload() {
 		return _autoDownload;
 	}

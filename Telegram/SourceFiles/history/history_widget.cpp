@@ -3750,6 +3750,7 @@ void HistoryWidget::setHistory(History *history) {
 		if (_history) {
 			setupPreview();
 			trackThreadFieldVisibility();
+			updateControlsGeometry();
 		} else {
 			_previewDrawPreview = nullptr;
 			_preview = nullptr;
@@ -8689,7 +8690,8 @@ void HistoryWidget::updateHistoryGeometry(
 		newScrollHeight -= _unblock->height();
 	} else {
 		if (editingMessage() || _canSendMessages) {
-			newScrollHeight -= (fieldHeight() + 2 * st::historySendPadding);
+			newScrollHeight -= (fieldHeight()
+				+ 2 * st::historySendPadding);
 		} else if (_sendRestriction) {
 			newScrollHeight -= _sendRestriction->height();
 		}
