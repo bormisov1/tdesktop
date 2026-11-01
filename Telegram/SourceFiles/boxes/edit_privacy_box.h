@@ -7,9 +7,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
 
-#include "ui/layers/box_content.h"
-#include "mtproto/sender.h"
 #include "api/api_user_privacy.h"
+#include "base/flat_set.h"
+#include "mtproto/sender.h"
+#include "ui/layers/box_content.h"
 
 namespace Ui {
 class GenericBox;
@@ -177,6 +178,12 @@ void EditMessagesPrivacyBox(
 	not_null<Ui::GenericBox*> box,
 	not_null<Window::SessionController*> controller,
 	const QString &highlightControlId = QString());
+
+void EditLocalPrivacyExceptions(
+	not_null<Window::SessionController*> window,
+	const QString &title,
+	const base::flat_set<PeerId> &selected,
+	Fn<void(base::flat_set<PeerId>)> done);
 
 [[nodiscard]] rpl::producer<int> SetupChargeSlider(
 	not_null<Ui::VerticalLayout*> container,

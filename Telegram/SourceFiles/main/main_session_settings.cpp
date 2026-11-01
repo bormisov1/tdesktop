@@ -99,6 +99,10 @@ QByteArray SessionSettings::serialize() const {
 		+ _noReadReceipts.size() * sizeof(quint64);
 	size += sizeof(qint32) // _noTyping size
 		+ _noTyping.size() * sizeof(quint64);
+	size += sizeof(qint32) * 2
+		+ sizeof(qint32) * 2
+		+ (_readReceiptsAlways.size() + _typingAlways.size())
+			* sizeof(quint64);
 
 	auto result = QByteArray();
 	result.reserve(size);
@@ -199,6 +203,17 @@ QByteArray SessionSettings::serialize() const {
 		for (const auto &peerId : _noTyping) {
 			stream << SerializePeerId(peerId);
 		}
+		stream
+			<< qint32(_readReceiptsEveryone ? 1 : 0)
+			<< qint32(_typingEveryone ? 1 : 0)
+			<< qint32(_readReceiptsAlways.size());
+		for (const auto &peerId : _readReceiptsAlways) {
+			stream << SerializePeerId(peerId);
+		}
+		stream << qint32(_typingAlways.size());
+		for (const auto &peerId : _typingAlways) {
+			stream << SerializePeerId(peerId);
+		}
 	}
 
 	Ensures(result.size() == size);
@@ -277,6 +292,10 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	std::vector<Data::ReactionId> extraFavoriteReactions;
 	base::flat_set<PeerId> noReadReceipts;
 	base::flat_set<PeerId> noTyping;
+	base::flat_set<PeerId> readReceiptsAlways;
+	base::flat_set<PeerId> typingAlways;
+	auto readReceiptsEveryone = qint32(1);
+	auto typingEveryone = qint32(1);
 
 	stream >> versionTag;
 	if (versionTag == kVersionTag) {
@@ -795,6 +814,24 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 			}
 		}
 	}
+	if (!stream.atEnd()) {
+		stream >> readReceiptsEveryone >> typingEveryone;
+		for (auto *set : { &readReceiptsAlways, &typingAlways }) {
+			auto count = qint32(0);
+			stream >> count;
+			if (count < 0 || stream.status() != QDataStream::Ok) {
+				return;
+			}
+			for (auto i = 0; i != count; ++i) {
+				auto peerId = quint64();
+				stream >> peerId;
+				if (stream.status() != QDataStream::Ok) {
+					return;
+				}
+				set->emplace(DeserializePeerId(peerId));
+			}
+		}
+	}
 	if (stream.status() != QDataStream::Ok) {
 		LOG(("App Error: "
 			"Bad data for SessionSettings::addFromSerialized()"));
@@ -863,6 +900,10 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	_extraFavoriteReactions = std::move(extraFavoriteReactions);
 	_noReadReceipts = std::move(noReadReceipts);
 	_noTyping = std::move(noTyping);
+	_readReceiptsAlways = std::move(readReceiptsAlways);
+	_typingAlways = std::move(typingAlways);
+	_readReceiptsEveryone = (readReceiptsEveryone == 1);
+	_typingEveryone = (typingEveryone == 1);
 
 	if (version < 2) {
 		app.setLastSeenWarningSeen(appLastSeenWarningSeen == 1);

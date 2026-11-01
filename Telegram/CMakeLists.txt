@@ -934,8 +934,6 @@ PRIVATE
     history/view/controls/history_view_compose_ai_tooltip.h
     history/view/controls/history_view_compose_controls.cpp
     history/view/controls/history_view_compose_controls.h
-    history/view/controls/history_view_privacy_toggles.cpp
-    history/view/controls/history_view_privacy_toggles.h
     history/view/controls/history_view_top_controls.cpp
     history/view/controls/history_view_top_controls.h
     history/view/controls/history_view_compose_media_edit_manager.cpp

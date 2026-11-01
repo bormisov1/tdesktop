@@ -92,24 +92,48 @@ public:
 		_groupEmojiSectionHidden.remove(peerId);
 	}
 
-	void setNoReadReceipts(PeerId peerId) {
-		_noReadReceipts.insert(peerId);
-	}
 	[[nodiscard]] bool noReadReceipts(PeerId peerId) const {
-		return _noReadReceipts.contains(peerId);
+		return _noReadReceipts.contains(peerId)
+			|| (!_readReceiptsEveryone && !_readReceiptsAlways.contains(peerId));
 	}
-	void removeNoReadReceipts(PeerId peerId) {
-		_noReadReceipts.remove(peerId);
+	[[nodiscard]] bool readReceiptsEveryone() const {
+		return _readReceiptsEveryone;
+	}
+	[[nodiscard]] const base::flat_set<PeerId> &readReceiptsAlways() const {
+		return _readReceiptsAlways;
+	}
+	[[nodiscard]] const base::flat_set<PeerId> &readReceiptsNever() const {
+		return _noReadReceipts;
+	}
+	void setReadReceiptsPrivacy(
+			bool everyone,
+			base::flat_set<PeerId> always,
+			base::flat_set<PeerId> never) {
+		_readReceiptsEveryone = everyone;
+		_readReceiptsAlways = std::move(always);
+		_noReadReceipts = std::move(never);
 	}
 
-	void setNoTyping(PeerId peerId) {
-		_noTyping.insert(peerId);
-	}
 	[[nodiscard]] bool noTyping(PeerId peerId) const {
-		return _noTyping.contains(peerId);
+		return _noTyping.contains(peerId)
+			|| (!_typingEveryone && !_typingAlways.contains(peerId));
 	}
-	void removeNoTyping(PeerId peerId) {
-		_noTyping.remove(peerId);
+	[[nodiscard]] bool typingEveryone() const {
+		return _typingEveryone;
+	}
+	[[nodiscard]] const base::flat_set<PeerId> &typingAlways() const {
+		return _typingAlways;
+	}
+	[[nodiscard]] const base::flat_set<PeerId> &typingNever() const {
+		return _noTyping;
+	}
+	void setTypingPrivacy(
+			bool everyone,
+			base::flat_set<PeerId> always,
+			base::flat_set<PeerId> never) {
+		_typingEveryone = everyone;
+		_typingAlways = std::move(always);
+		_noTyping = std::move(never);
 	}
 
 	[[nodiscard]] Data::AutoDownload::Full &autoDownload() {
@@ -238,6 +262,10 @@ private:
 	base::flat_set<PeerId> _groupEmojiSectionHidden;
 	base::flat_set<PeerId> _noReadReceipts;
 	base::flat_set<PeerId> _noTyping;
+	base::flat_set<PeerId> _readReceiptsAlways;
+	base::flat_set<PeerId> _typingAlways;
+	bool _readReceiptsEveryone = true;
+	bool _typingEveryone = true;
 	bool _hadLegacyCallsPeerToPeerNobody = false;
 	Data::AutoDownload::Full _autoDownload;
 	rpl::variable<bool> _archiveCollapsed = false;
