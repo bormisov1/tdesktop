@@ -95,6 +95,8 @@ QByteArray SessionSettings::serialize() const {
 	for (const auto &id : _extraFavoriteReactions) {
 		size += sizeof(quint64) + Serialize::stringSize(id.emoji());
 	}
+	size += sizeof(qint32) // _noReadReceipts size
+		+ _noReadReceipts.size() * sizeof(quint64);
 
 	auto result = QByteArray();
 	result.reserve(size);
@@ -187,6 +189,10 @@ QByteArray SessionSettings::serialize() const {
 		for (const auto &id : _extraFavoriteReactions) {
 			stream << quint64(id.custom()) << id.emoji();
 		}
+		stream << qint32(_noReadReceipts.size());
+		for (const auto &peerId : _noReadReceipts) {
+			stream << SerializePeerId(peerId);
+		}
 	}
 
 	Ensures(result.size() == size);
@@ -263,6 +269,7 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	qint32 disableSharingBoxShowsCount = 0;
 	qint32 phoneNumberHidden = 0;
 	std::vector<Data::ReactionId> extraFavoriteReactions;
+	base::flat_set<PeerId> noReadReceipts;
 
 	stream >> versionTag;
 	if (versionTag == kVersionTag) {
@@ -745,6 +752,24 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 			}
 		}
 	}
+	if (!stream.atEnd()) {
+		auto count = qint32(0);
+		stream >> count;
+		if (stream.status() == QDataStream::Ok) {
+			for (auto i = 0; i != count; ++i) {
+				auto peerId = quint64();
+				stream >> peerId;
+				if (stream.status() != QDataStream::Ok) {
+					LOG(("App Error: "
+						"Bad data for SessionSettings::addFromSerialized()"
+						"with noReadReceipts"));
+					return;
+				}
+				noReadReceipts.emplace(
+					DeserializePeerId(peerId));
+			}
+		}
+	}
 	if (stream.status() != QDataStream::Ok) {
 		LOG(("App Error: "
 			"Bad data for SessionSettings::addFromSerialized()"));
@@ -811,6 +836,7 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	_disableSharingBoxShowsCount = disableSharingBoxShowsCount;
 	_phoneNumberHidden = (phoneNumberHidden == 1);
 	_extraFavoriteReactions = std::move(extraFavoriteReactions);
+	_noReadReceipts = std::move(noReadReceipts);
 
 	if (version < 2) {
 		app.setLastSeenWarningSeen(appLastSeenWarningSeen == 1);

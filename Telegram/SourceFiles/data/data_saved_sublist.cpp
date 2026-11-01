@@ -24,6 +24,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item.h"
 #include "history/history_unread_things.h"
 #include "main/main_session.h"
+#include "main/main_session_settings.h"
 #include "window/notifications_manager.h"
 
 namespace Data {
@@ -708,6 +709,14 @@ void SavedSublist::sendReadTillRequest() {
 	api->request(base::take(_readRequestId)).cancel();
 
 	_sentReadTill = computeInboxReadTillFull();
+
+	if (_parent->session().settings().noReadReceipts(
+		_parent->parentChat()->id)) {
+		DEBUG_LOG(("Reading: read receipts are disabled, "
+			"not sending sublist read receipt."));
+		return;
+	}
+
 	_readRequestId = api->request(MTPmessages_ReadSavedHistory(
 		parentChat->input(),
 		sublistPeer()->input(),

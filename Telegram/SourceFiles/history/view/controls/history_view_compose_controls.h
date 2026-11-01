@@ -119,6 +119,7 @@ using AiTooltipManager = ComposeTooltipManager;
 namespace HistoryView {
 
 class FieldHeader;
+class PrivacyTogglesRow;
 
 enum class ComposeControlsMode {
 	Normal,
@@ -605,6 +606,7 @@ private:
 
 	friend class FieldHeader;
 	const std::unique_ptr<FieldHeader> _header;
+	const std::unique_ptr<PrivacyTogglesRow> _privacyRow;
 	const std::unique_ptr<Controls::VoiceRecordBar> _voiceRecordBar;
 	std::unique_ptr<Controls::AiTooltipManager> _aiTooltipManager;
 	std::unique_ptr<Controls::AiTooltipManager> _sendAsFileTooltipManager;

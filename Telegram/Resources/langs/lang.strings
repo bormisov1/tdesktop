@@ -8777,4 +8777,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_folder_archive_failed" = "Failed to create archive.";
 "lng_folder_archive_status" = "ZIP archive";
 
+"lng_privacy_no_read_receipts" = "Send read receipts";
+
 // Keys finished
