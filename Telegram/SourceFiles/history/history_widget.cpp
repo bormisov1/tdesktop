@@ -380,6 +380,9 @@ HistoryWidget::HistoryWidget(
 	_privacyRow->addToggle(
 		HistoryView::PrivacyTogglesRow::Toggle::SendReadReceipts,
 		tr::lng_privacy_no_read_receipts(tr::now));
+	_privacyRow->addToggle(
+		HistoryView::PrivacyTogglesRow::Toggle::SendTypingStatus,
+		tr::lng_privacy_no_typing_status(tr::now));
 	setAcceptDrops(true);
 	setVisualTabOrder(true);
 

@@ -102,6 +102,16 @@ public:
 		_noReadReceipts.remove(peerId);
 	}
 
+	void setNoTyping(PeerId peerId) {
+		_noTyping.insert(peerId);
+	}
+	[[nodiscard]] bool noTyping(PeerId peerId) const {
+		return _noTyping.contains(peerId);
+	}
+	void removeNoTyping(PeerId peerId) {
+		_noTyping.remove(peerId);
+	}
+
 	[[nodiscard]] Data::AutoDownload::Full &autoDownload() {
 		return _autoDownload;
 	}
@@ -227,6 +237,7 @@ private:
 	base::flat_set<PeerId> _groupStickersSectionHidden;
 	base::flat_set<PeerId> _groupEmojiSectionHidden;
 	base::flat_set<PeerId> _noReadReceipts;
+	base::flat_set<PeerId> _noTyping;
 	bool _hadLegacyCallsPeerToPeerNobody = false;
 	Data::AutoDownload::Full _autoDownload;
 	rpl::variable<bool> _archiveCollapsed = false;

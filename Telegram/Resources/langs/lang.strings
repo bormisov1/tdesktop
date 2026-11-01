@@ -8778,5 +8778,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_folder_archive_status" = "ZIP archive";
 
 "lng_privacy_no_read_receipts" = "Send read receipts";
+"lng_privacy_no_typing_status" = "Send typing status";
 
 // Keys finished
